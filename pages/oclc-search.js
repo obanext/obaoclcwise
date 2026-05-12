@@ -59,6 +59,18 @@ function rawFacetFilterValue(facet = {}, option = {}) {
   return "";
 }
 
+function isAvailableNowFilter(facet = {}, option = {}, filterValue = "") {
+  return (
+    text(facet.name) === "availableNow" &&
+    (text(option.term) === "AT_THE_LIBRARY" || text(filterValue) === "availableNow:AT_THE_LIBRARY")
+  );
+}
+
+function readBooleanQuery(value) {
+  const normalized = text(Array.isArray(value) ? value[0] : value).toLowerCase();
+  return normalized === "true" || normalized === "1";
+}
+
 function itemTitle(item = {}) {
   return text(item.title || item.mainTitle || item.childTitleList?.[0]?.childTitle);
 }
@@ -118,6 +130,7 @@ export default function OclcSearchPage() {
   const [searchScope, setSearchScope] = useState(DEFAULT_SCOPE);
   const [sort, setSort] = useState(DEFAULT_SORT);
   const [facetFilters, setFacetFilters] = useState([]);
+  const [filterAvailableTitles, setFilterAvailableTitles] = useState(false);
 
   const page = Number(router.query.page || 1);
 
@@ -129,13 +142,19 @@ export default function OclcSearchPage() {
     const p = typeof router.query.perspectiveId === "string" ? router.query.perspectiveId : DEFAULT_PERSPECTIVE_ID;
     const scope = typeof router.query.searchScope === "string" ? router.query.searchScope : DEFAULT_SCOPE;
     const sortValue = typeof router.query.sort === "string" ? router.query.sort : DEFAULT_SORT;
-    const filters = asArray(router.query.facetFilter).map(text).filter(Boolean);
+
+    const rawFilters = asArray(router.query.facetFilter).map(text).filter(Boolean);
+    const availableFromFacet = rawFilters.includes("availableNow:AT_THE_LIBRARY");
+    const availableFromQuery = readBooleanQuery(router.query.filterAvailableTitles);
+    const nextFilterAvailableTitles = availableFromQuery || availableFromFacet;
+    const filters = rawFilters.filter((filter) => filter !== "availableNow:AT_THE_LIBRARY");
 
     setQuery(q);
     setPerspectiveId(p);
     setSearchScope(scope);
     setSort(sortValue);
     setFacetFilters(filters);
+    setFilterAvailableTitles(nextFilterAvailableTitles);
 
     runSearch({
       q,
@@ -144,6 +163,7 @@ export default function OclcSearchPage() {
       nextSearchScope: scope,
       nextSort: sortValue,
       nextFacetFilters: filters,
+      nextFilterAvailableTitles,
       replaceUrl: false,
     });
   }, [
@@ -154,6 +174,7 @@ export default function OclcSearchPage() {
     router.query.searchScope,
     router.query.sort,
     router.query.facetFilter,
+    router.query.filterAvailableTitles,
   ]);
 
   useEffect(() => {
@@ -191,6 +212,7 @@ export default function OclcSearchPage() {
     nextSearchScope,
     nextSort,
     nextFacetFilters,
+    nextFilterAvailableTitles,
   }) {
     const params = new URLSearchParams();
 
@@ -204,6 +226,10 @@ export default function OclcSearchPage() {
       if (text(filter)) params.append("facetFilter", text(filter));
     });
 
+    if (nextFilterAvailableTitles) {
+      params.set("filterAvailableTitles", "true");
+    }
+
     return `/oclc-search?${params.toString()}`;
   }
 
@@ -214,6 +240,7 @@ export default function OclcSearchPage() {
     nextSearchScope,
     nextSort,
     nextFacetFilters,
+    nextFilterAvailableTitles,
   }) {
     const params = new URLSearchParams();
 
@@ -223,6 +250,7 @@ export default function OclcSearchPage() {
     params.set("perspectiveId", String(nextPerspectiveId || DEFAULT_PERSPECTIVE_ID));
     params.set("searchScope", String(nextSearchScope || DEFAULT_SCOPE));
     params.set("sort", String(nextSort || DEFAULT_SORT));
+    params.set("filterAvailableTitles", nextFilterAvailableTitles ? "true" : "false");
 
     asArray(nextFacetFilters).forEach((filter) => {
       if (text(filter)) params.append("facetFilter", text(filter));
@@ -238,6 +266,7 @@ export default function OclcSearchPage() {
     nextSearchScope = searchScope,
     nextSort = sort,
     nextFacetFilters = facetFilters,
+    nextFilterAvailableTitles = filterAvailableTitles,
     replaceUrl = true,
   } = {}) {
     setLoading(true);
@@ -252,6 +281,7 @@ export default function OclcSearchPage() {
         nextSearchScope,
         nextSort,
         nextFacetFilters,
+        nextFilterAvailableTitles,
       })
     )
       .then(async (response) => {
@@ -275,6 +305,7 @@ export default function OclcSearchPage() {
               nextSearchScope,
               nextSort,
               nextFacetFilters,
+              nextFilterAvailableTitles,
             }),
             undefined,
             { shallow: true }
@@ -297,30 +328,35 @@ export default function OclcSearchPage() {
   function searchFullCollection() {
     setQuery("*.*");
     setFacetFilters([]);
-    runSearch({ q: "*.*", nextPage: 1, nextFacetFilters: [] });
+    setFilterAvailableTitles(false);
+    runSearch({ q: "*.*", nextPage: 1, nextFacetFilters: [], nextFilterAvailableTitles: false });
   }
 
   function changePerspective(nextPerspectiveId) {
     setPerspectiveId(nextPerspectiveId);
     setFacetFilters([]);
+    setFilterAvailableTitles(false);
 
     runSearch({
       q: query,
       nextPage: 1,
       nextPerspectiveId,
       nextFacetFilters: [],
+      nextFilterAvailableTitles: false,
     });
   }
 
   function changeScope(nextScope) {
     setSearchScope(nextScope);
     setFacetFilters([]);
+    setFilterAvailableTitles(false);
 
     runSearch({
       q: query,
       nextPage: 1,
       nextSearchScope: nextScope,
       nextFacetFilters: [],
+      nextFilterAvailableTitles: false,
     });
   }
 
@@ -331,11 +367,27 @@ export default function OclcSearchPage() {
       q: query,
       nextPage: 1,
       nextSort,
+      nextFilterAvailableTitles: filterAvailableTitles,
     });
   }
 
-  function toggleFacet(filterValue) {
+  function toggleFacet(filterValue, options = {}) {
     const value = text(filterValue);
+
+    if (options.isAvailableNow) {
+      const nextFilterAvailableTitles = !filterAvailableTitles;
+      setFilterAvailableTitles(nextFilterAvailableTitles);
+
+      runSearch({
+        q: query,
+        nextPage: 1,
+        nextFacetFilters: facetFilters,
+        nextFilterAvailableTitles,
+      });
+
+      return;
+    }
+
     if (!value) return;
 
     const exists = facetFilters.includes(value);
@@ -347,6 +399,7 @@ export default function OclcSearchPage() {
       q: query,
       nextPage: 1,
       nextFacetFilters: nextFilters,
+      nextFilterAvailableTitles: filterAvailableTitles,
     });
   }
 
@@ -413,7 +466,8 @@ export default function OclcSearchPage() {
                     setQuery("");
                     setSuggestions([]);
                     setFacetFilters([]);
-                    runSearch({ q: "", nextPage: 1, nextFacetFilters: [] });
+                    setFilterAvailableTitles(false);
+                    runSearch({ q: "", nextPage: 1, nextFacetFilters: [], nextFilterAvailableTitles: false });
                   }}
                 >
                   ×
@@ -431,7 +485,8 @@ export default function OclcSearchPage() {
                       onClick={() => {
                         setQuery(suggestion);
                         setFacetFilters([]);
-                        runSearch({ q: suggestion, nextPage: 1, nextFacetFilters: [] });
+                        setFilterAvailableTitles(false);
+                        runSearch({ q: suggestion, nextPage: 1, nextFacetFilters: [], nextFilterAvailableTitles: false });
                       }}
                     >
                       {suggestion}
@@ -518,14 +573,15 @@ export default function OclcSearchPage() {
                         const valueLabel = rawFacetValueLabel(option);
                         const valueMeta = rawFacetValueMeta(option);
                         const filterValue = rawFacetFilterValue(facet, option);
-                        const checked = selectedFilters.has(filterValue);
+                        const isAvailableNow = isAvailableNowFilter(facet, option, filterValue);
+                        const checked = isAvailableNow ? filterAvailableTitles : selectedFilters.has(filterValue);
 
                         return (
                           <button
                             key={`${key}-${filterValue}-${valueLabel}`}
                             type="button"
                             className={checked ? "filter-checkbox active" : "filter-checkbox"}
-                            onClick={() => toggleFacet(filterValue)}
+                            onClick={() => toggleFacet(filterValue, { isAvailableNow })}
                           >
                             <span className="checkbox-dot" />
                             <span className="filter-label">
