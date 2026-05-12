@@ -71,6 +71,31 @@ function readBooleanQuery(value) {
   return normalized === "true" || normalized === "1";
 }
 
+function parseSearchStateFromQuery(queryObject = {}) {
+  const rawFilters = asArray(queryObject.facetFilter).map(text).filter(Boolean);
+  const availableFromFacet = rawFilters.includes("availableNow:AT_THE_LIBRARY");
+  const availableFromQuery = readBooleanQuery(queryObject.filterAvailableTitles);
+
+  return {
+    q: typeof queryObject.q === "string" ? queryObject.q : "",
+    nextPage: Math.max(Number(queryObject.page || 1) || 1, 1),
+    nextPerspectiveId:
+      typeof queryObject.perspectiveId === "string" && queryObject.perspectiveId
+        ? queryObject.perspectiveId
+        : DEFAULT_PERSPECTIVE_ID,
+    nextSearchScope:
+      typeof queryObject.searchScope === "string" && queryObject.searchScope
+        ? queryObject.searchScope
+        : DEFAULT_SCOPE,
+    nextSort:
+      typeof queryObject.sort === "string" && queryObject.sort
+        ? queryObject.sort
+        : DEFAULT_SORT,
+    nextFacetFilters: rawFilters.filter((filter) => filter !== "availableNow:AT_THE_LIBRARY"),
+    nextFilterAvailableTitles: availableFromQuery || availableFromFacet,
+  };
+}
+
 function itemTitle(item = {}) {
   return text(item.title || item.mainTitle || item.childTitleList?.[0]?.childTitle);
 }
@@ -137,45 +162,17 @@ export default function OclcSearchPage() {
   useEffect(() => {
     if (!router.isReady) return;
 
-    const q = typeof router.query.q === "string" ? router.query.q : "";
-    const nextPage = Number(router.query.page || 1);
-    const p = typeof router.query.perspectiveId === "string" ? router.query.perspectiveId : DEFAULT_PERSPECTIVE_ID;
-    const scope = typeof router.query.searchScope === "string" ? router.query.searchScope : DEFAULT_SCOPE;
-    const sortValue = typeof router.query.sort === "string" ? router.query.sort : DEFAULT_SORT;
+    const urlState = parseSearchStateFromQuery(router.query);
 
-    const rawFilters = asArray(router.query.facetFilter).map(text).filter(Boolean);
-    const availableFromFacet = rawFilters.includes("availableNow:AT_THE_LIBRARY");
-    const availableFromQuery = readBooleanQuery(router.query.filterAvailableTitles);
-    const nextFilterAvailableTitles = availableFromQuery || availableFromFacet;
-    const filters = rawFilters.filter((filter) => filter !== "availableNow:AT_THE_LIBRARY");
+    setQuery(urlState.q);
+    setPerspectiveId(urlState.nextPerspectiveId);
+    setSearchScope(urlState.nextSearchScope);
+    setSort(urlState.nextSort);
+    setFacetFilters(urlState.nextFacetFilters);
+    setFilterAvailableTitles(urlState.nextFilterAvailableTitles);
 
-    setQuery(q);
-    setPerspectiveId(p);
-    setSearchScope(scope);
-    setSort(sortValue);
-    setFacetFilters(filters);
-    setFilterAvailableTitles(nextFilterAvailableTitles);
-
-    runSearch({
-      q,
-      nextPage,
-      nextPerspectiveId: p,
-      nextSearchScope: scope,
-      nextSort: sortValue,
-      nextFacetFilters: filters,
-      nextFilterAvailableTitles,
-      replaceUrl: false,
-    });
-  }, [
-    router.isReady,
-    router.query.q,
-    router.query.page,
-    router.query.perspectiveId,
-    router.query.searchScope,
-    router.query.sort,
-    router.query.facetFilter,
-    router.query.filterAvailableTitles,
-  ]);
+    runSearchFromState(urlState);
+  }, [router.isReady, router.asPath]);
 
   useEffect(() => {
     const q = query.trim();
@@ -204,6 +201,18 @@ export default function OclcSearchPage() {
 
     return () => clearTimeout(timer);
   }, [query, searchScope]);
+
+  function currentSearchState() {
+    return {
+      q: query,
+      nextPage: Math.max(Number(router.query.page || 1) || 1, 1),
+      nextPerspectiveId: perspectiveId || DEFAULT_PERSPECTIVE_ID,
+      nextSearchScope: searchScope || DEFAULT_SCOPE,
+      nextSort: sort || DEFAULT_SORT,
+      nextFacetFilters: facetFilters,
+      nextFilterAvailableTitles: filterAvailableTitles,
+    };
+  }
 
   function buildUrl({
     q,
@@ -259,31 +268,21 @@ export default function OclcSearchPage() {
     return `/api/oclc-search?${params.toString()}`;
   }
 
-  function runSearch({
-    q = query,
-    nextPage = 1,
-    nextPerspectiveId = perspectiveId,
-    nextSearchScope = searchScope,
-    nextSort = sort,
-    nextFacetFilters = facetFilters,
-    nextFilterAvailableTitles = filterAvailableTitles,
-    replaceUrl = true,
-  } = {}) {
+  function navigateSearch(nextValues = {}) {
+    const nextState = {
+      ...currentSearchState(),
+      ...nextValues,
+    };
+
+    router.push(buildUrl(nextState), undefined, { shallow: true });
+  }
+
+  function runSearchFromState(searchState) {
     setLoading(true);
     setError("");
     setShowSuggestions(false);
 
-    fetch(
-      buildApiUrl({
-        q,
-        nextPage,
-        nextPerspectiveId,
-        nextSearchScope,
-        nextSort,
-        nextFacetFilters,
-        nextFilterAvailableTitles,
-      })
-    )
+    fetch(buildApiUrl(searchState))
       .then(async (response) => {
         const json = await response.json().catch(() => null);
 
@@ -295,22 +294,6 @@ export default function OclcSearchPage() {
       })
       .then((json) => {
         setData(json);
-
-        if (replaceUrl) {
-          router.replace(
-            buildUrl({
-              q,
-              nextPage,
-              nextPerspectiveId,
-              nextSearchScope,
-              nextSort,
-              nextFacetFilters,
-              nextFilterAvailableTitles,
-            }),
-            undefined,
-            { shallow: true }
-          );
-        }
       })
       .catch((err) => {
         setError(err.message || "Onbekende fout");
@@ -322,22 +305,20 @@ export default function OclcSearchPage() {
 
   function submit(event) {
     event.preventDefault();
-    runSearch({ q: query, nextPage: 1 });
+    navigateSearch({ q: query, nextPage: 1 });
   }
 
   function searchFullCollection() {
-    setQuery("*.*");
-    setFacetFilters([]);
-    setFilterAvailableTitles(false);
-    runSearch({ q: "*.*", nextPage: 1, nextFacetFilters: [], nextFilterAvailableTitles: false });
+    navigateSearch({
+      q: "*.*",
+      nextPage: 1,
+      nextFacetFilters: [],
+      nextFilterAvailableTitles: false,
+    });
   }
 
   function changePerspective(nextPerspectiveId) {
-    setPerspectiveId(nextPerspectiveId);
-    setFacetFilters([]);
-    setFilterAvailableTitles(false);
-
-    runSearch({
+    navigateSearch({
       q: query,
       nextPage: 1,
       nextPerspectiveId,
@@ -347,11 +328,7 @@ export default function OclcSearchPage() {
   }
 
   function changeScope(nextScope) {
-    setSearchScope(nextScope);
-    setFacetFilters([]);
-    setFilterAvailableTitles(false);
-
-    runSearch({
+    navigateSearch({
       q: query,
       nextPage: 1,
       nextSearchScope: nextScope,
@@ -361,45 +338,34 @@ export default function OclcSearchPage() {
   }
 
   function changeSort(nextSort) {
-    setSort(nextSort);
-
-    runSearch({
+    navigateSearch({
       q: query,
       nextPage: 1,
       nextSort,
-      nextFilterAvailableTitles: filterAvailableTitles,
     });
   }
 
   function toggleFacet(filterValue, options = {}) {
-    const value = text(filterValue);
-
     if (options.isAvailableNow) {
-      const nextFilterAvailableTitles = !filterAvailableTitles;
-      setFilterAvailableTitles(nextFilterAvailableTitles);
-
-      runSearch({
+      navigateSearch({
         q: query,
         nextPage: 1,
-        nextFacetFilters: facetFilters,
-        nextFilterAvailableTitles,
+        nextFilterAvailableTitles: !filterAvailableTitles,
       });
 
       return;
     }
 
+    const value = text(filterValue);
     if (!value) return;
 
     const exists = facetFilters.includes(value);
     const nextFilters = exists ? facetFilters.filter((item) => item !== value) : [...facetFilters, value];
 
-    setFacetFilters(nextFilters);
-
-    runSearch({
+    navigateSearch({
       q: query,
       nextPage: 1,
       nextFacetFilters: nextFilters,
-      nextFilterAvailableTitles: filterAvailableTitles,
     });
   }
 
@@ -465,9 +431,12 @@ export default function OclcSearchPage() {
                   onClick={() => {
                     setQuery("");
                     setSuggestions([]);
-                    setFacetFilters([]);
-                    setFilterAvailableTitles(false);
-                    runSearch({ q: "", nextPage: 1, nextFacetFilters: [], nextFilterAvailableTitles: false });
+                    navigateSearch({
+                      q: "",
+                      nextPage: 1,
+                      nextFacetFilters: [],
+                      nextFilterAvailableTitles: false,
+                    });
                   }}
                 >
                   ×
@@ -484,9 +453,12 @@ export default function OclcSearchPage() {
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => {
                         setQuery(suggestion);
-                        setFacetFilters([]);
-                        setFilterAvailableTitles(false);
-                        runSearch({ q: suggestion, nextPage: 1, nextFacetFilters: [], nextFilterAvailableTitles: false });
+                        navigateSearch({
+                          q: suggestion,
+                          nextPage: 1,
+                          nextFacetFilters: [],
+                          nextFilterAvailableTitles: false,
+                        });
                       }}
                     >
                       {suggestion}
@@ -705,7 +677,7 @@ export default function OclcSearchPage() {
                   type="button"
                   className="tab-button"
                   disabled={currentPage <= 1}
-                  onClick={() => runSearch({ q: query, nextPage: currentPage - 1 })}
+                  onClick={() => navigateSearch({ q: query, nextPage: currentPage - 1 })}
                 >
                   vorige
                 </button>
@@ -714,7 +686,7 @@ export default function OclcSearchPage() {
                   type="button"
                   className="tab-button active"
                   disabled={!hasNextPage}
-                  onClick={() => runSearch({ q: query, nextPage: currentPage + 1 })}
+                  onClick={() => navigateSearch({ q: query, nextPage: currentPage + 1 })}
                 >
                   volgende
                 </button>
