@@ -24,46 +24,28 @@ const DEFAULT_SORT = "2910";
 const DEFAULT_LIMIT = 20;
 const DEFAULT_VISIBLE_FACET_VALUES = 8;
 
-const FACET_LABELS_NL = {
-  "LABELKEY-AVAILABLE-NOW": "Beschikbaarheid",
-  "LABELKEY-BRANCH-ID": "Vestiging",
-  "LABELKEY-MEDIUM-TYPE-CODE": "Materiaal",
-  "LABELKEY-FICTION-NONFICTION-CODE": "Inhoud",
-  "LABELKEY-AUTHOR-FACET": "Auteur",
-  "LABELKEY-AUDIENCE-CODE": "Doelgroep",
-  "LABELKEY-TARGET-AUDIENCE-CODE": "Leeftijd",
-  "LABELKEY-SUBJECT": "Onderwerp",
-  "LABELKEY-GENRE-CODE": "Genre",
-  "LABELKEY-SERIES": "Serie",
-  "LABELKEY-LANGUAGE-CODE": "Taal",
-  "LABELKEY-PUBLICATION-YEAR": "Publicatiejaar",
-};
-
-const SORT_LABELS_NL = {
-  "2910": "relevantie",
-  "2911": "populariteit",
-  "2912": "jaar",
-  "2913": "auteur",
-  "2914": "titel",
-  "SORTBY-RELEVANCE": "relevantie",
-  "SORTBY-POPULARITY": "populariteit",
-  "SORTBY-DATE": "jaar",
-  "SORTBY-AUTHOR": "auteur",
-  "SORTBY-TITLE": "titel",
-};
-
-function labelFor(labelKey, fallback) {
-  return FACET_LABELS_NL[text(labelKey)] || text(fallback) || text(labelKey) || "Filter";
+function rawSortLabel(sort = {}) {
+  return text(sort.label || sort.labelText || sort.labelKey || sort.id);
 }
 
-function sortLabel(sort = {}) {
-  return SORT_LABELS_NL[String(sort.id)] || SORT_LABELS_NL[text(sort.labelKey || sort.label)] || text(sort.label || sort.labelKey || sort.id);
+function rawFacetTitle(facet = {}) {
+  const name = text(facet.name);
+  const label = text(facet.label || facet.labelKey);
+
+  if (name && label && label !== name) return `${name} — ${label}`;
+  return name || label || "facet";
 }
 
-function formatPublicationYear(value) {
-  const source = text(value);
-  const match = source.match(/^(\d{4})/);
-  return match ? match[1] : source;
+function rawFacetValueLabel(option = {}) {
+  return text(option.label || option.term || option.value || option.id);
+}
+
+function rawFacetValueMeta(option = {}) {
+  const key = text(option.key);
+  const term = text(option.term);
+
+  if (key && term) return `${key}:${term}`;
+  return text(option.facetFilter);
 }
 
 function itemTitle(item = {}) {
@@ -506,19 +488,20 @@ export default function OclcSearchPage() {
             ) : null}
 
             {facets.map((facet) => {
-              const key = text(facet.name || facet.labelKey || facet.label);
+              const key = text(facet.name || facet.labelKey || facet.label || facet.id);
               const expanded = Boolean(expandedFacets[key]);
               const values = asArray(facet.values);
               const visibleValues = expanded ? values : values.slice(0, DEFAULT_VISIBLE_FACET_VALUES);
 
               return (
                 <div className="filter-card filter-card-open" key={key}>
-                  <div className="filter-card-title">{labelFor(facet.labelKey, facet.label || facet.name)}</div>
+                  <div className="filter-card-title">{rawFacetTitle(facet)}</div>
 
                   {visibleValues.length ? (
                     <div className="filter-options">
                       {visibleValues.map((option) => {
-                        const valueLabel = key === "publicationYear" ? formatPublicationYear(option.label || option.term) : text(option.label || option.term);
+                        const valueLabel = rawFacetValueLabel(option);
+                        const valueMeta = rawFacetValueMeta(option);
                         const checked = selectedFilters.has(option.facetFilter);
 
                         return (
@@ -529,7 +512,10 @@ export default function OclcSearchPage() {
                             onClick={() => toggleFacet(option.facetFilter)}
                           >
                             <span className="checkbox-dot" />
-                            <span className="filter-label">{valueLabel}</span>
+                            <span className="filter-label">
+                              {valueLabel}
+                              {valueMeta && valueMeta !== valueLabel ? <small className="oclc-raw-filter-value">{valueMeta}</small> : null}
+                            </span>
                             <span className="filter-count">{Number(option.count || 0).toLocaleString("nl-NL")}</span>
                           </button>
                         );
@@ -571,11 +557,11 @@ export default function OclcSearchPage() {
                     {sortkeys.length ? (
                       sortkeys.map((sorting) => (
                         <option key={sorting.id} value={sorting.id}>
-                          {sortLabel(sorting)}
+                          {rawSortLabel(sorting)}
                         </option>
                       ))
                     ) : (
-                      <option value={DEFAULT_SORT}>relevantie</option>
+                      <option value={DEFAULT_SORT}>{DEFAULT_SORT}</option>
                     )}
                   </select>
                 </label>
