@@ -110,7 +110,7 @@ export default function HomePage() {
           <h1>Zandbak OCLC Wise zoek en detail endpoints voor oba.nl</h1>
           <p>
             In deze omgeving wordt OCLC Wise testdata geladen in een mock-up oba.nl design,
-            zowel voor de huidige IST-situatie, de toekomstige eis/wens SOLL voor oba.nl en de ALLe ouput uit de OCLC Wise endpoints
+            zowel voor de huidige IST-situatie, de toekomstige eis/wens SOLL voor oba.nl en de ALLe output uit de OCLC Wise endpoints
           </p>
           <p className="preselect-contact">
             Vragen: <a href="mailto:m.vos@oba.nl">m.vos@oba.nl</a>
