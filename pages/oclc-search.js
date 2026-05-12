@@ -469,7 +469,7 @@ export default function OclcSearchPage() {
                       onClick={() => changePerspective(String(perspective.id))}
                     >
                       <span className="radio-dot" />
-                      <span>{text(perspective.label || perspective.labelKey || perspective.id)}</span>
+                      <span>{text(perspective.label || perspective.labelText || perspective.labelKey || perspective.id)}</span>
                     </button>
                   ))
                 ) : (
@@ -483,17 +483,21 @@ export default function OclcSearchPage() {
                 <div className="filter-card-title">Zoekveld</div>
 
                 <div className="filter-options">
-                  {searchScopes.map((scope) => (
-                    <button
-                      key={scope.id || scope.value}
-                      type="button"
-                      className={String(scope.value) === String(searchScope) ? "filter-radio active" : "filter-radio"}
-                      onClick={() => changeScope(text(scope.value || DEFAULT_SCOPE))}
-                    >
-                      <span className="radio-dot" />
-                      <span>{text(scope.label || scope.value || scope.labelKey)}</span>
-                    </button>
-                  ))}
+                  {searchScopes.map((scope) => {
+                    const scopeValue = text(scope.value || scope.labelText || scope.label || DEFAULT_SCOPE);
+
+                    return (
+                      <button
+                        key={scope.id || scopeValue}
+                        type="button"
+                        className={String(scopeValue) === String(searchScope) ? "filter-radio active" : "filter-radio"}
+                        onClick={() => changeScope(scopeValue)}
+                      >
+                        <span className="radio-dot" />
+                        <span>{text(scope.label || scope.labelText || scope.value || scope.labelKey)}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -501,7 +505,7 @@ export default function OclcSearchPage() {
             {facets.map((facet) => {
               const key = text(facet.name || facet.labelKey || facet.label || facet.id);
               const expanded = Boolean(expandedFacets[key]);
-              const values = asArray(facet.values);
+              const values = asArray(facet.values || facet.filterList);
               const visibleValues = expanded ? values : values.slice(0, DEFAULT_VISIBLE_FACET_VALUES);
 
               return (
@@ -518,7 +522,7 @@ export default function OclcSearchPage() {
 
                         return (
                           <button
-                            key={`${key}-${filterValue}-${option.label}`}
+                            key={`${key}-${filterValue}-${valueLabel}`}
                             type="button"
                             className={checked ? "filter-checkbox active" : "filter-checkbox"}
                             onClick={() => toggleFacet(filterValue)}
@@ -558,7 +562,7 @@ export default function OclcSearchPage() {
               <div className="oba-results-heading">
                 <div>
                   <h1>
-                    '{text(data?.query) || query}' in {text(selectedPerspective?.label) || "OCLC collectie"}
+                    '{text(data?.query) || query}' in {text(selectedPerspective?.label || selectedPerspective?.labelText) || "OCLC collectie"}
                   </h1>
                   <div className="oba-result-count">{resultCount} resultaten</div>
                 </div>
