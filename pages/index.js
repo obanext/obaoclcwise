@@ -117,9 +117,9 @@ export default function HomePage() {
           </p>
         </section>
 
-        <OptionSection title="Detailpagina" options={detailOptions} />
-        <OptionSection title="Zoekpagina" options={searchOptions} />
-        <OptionSection title="Old school Aquabrowser" options={oldSchoolOptions} />
+        <OptionSection title="detailpagina" options={detailOptions} />
+        <OptionSection title="zoekpagina" options={searchOptions} />
+        <OptionSection title="old school Aquabrowser-functies" options={oldSchoolOptions} />
       </div>
     </main>
   );
