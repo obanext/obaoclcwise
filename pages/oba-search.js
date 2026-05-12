@@ -21,7 +21,7 @@ const SORT_LABELS = {
   "2914": "titel",
 };
 
-const DEFAULT_PERSPECTIVE_ID = "3687";
+const DEFAULT_PERSPECTIVE_ID = "3682";
 const DEFAULT_SCOPE = "anything";
 const DEFAULT_SORT = "2910";
 
