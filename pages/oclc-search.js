@@ -70,6 +70,7 @@ function readBooleanQuery(value) {
   const normalized = text(Array.isArray(value) ? value[0] : value).toLowerCase();
   return normalized === "true" || normalized === "1";
 }
+
 function parseSearchStateFromPath(asPath = "") {
   const queryString = String(asPath).split("?")[1] || "";
   const params = new URLSearchParams(queryString);
@@ -155,7 +156,7 @@ export default function OclcSearchPage() {
   useEffect(() => {
     if (!router.isReady) return;
 
-   const urlState = parseSearchStateFromPath(router.asPath);
+    const urlState = parseSearchStateFromPath(router.asPath);
 
     setQuery(urlState.q);
     setPerspectiveId(urlState.nextPerspectiveId);
@@ -196,12 +197,14 @@ export default function OclcSearchPage() {
   }, [query, searchScope]);
 
   function currentSearchState() {
+    const urlState = parseSearchStateFromPath(router.asPath);
+
     return {
+      ...urlState,
       q: query,
-      nextPage: Math.max(Number(router.query.page || 1) || 1, 1),
-      nextPerspectiveId: perspectiveId || DEFAULT_PERSPECTIVE_ID,
-      nextSearchScope: searchScope || DEFAULT_SCOPE,
-      nextSort: sort || DEFAULT_SORT,
+      nextPerspectiveId: perspectiveId || urlState.nextPerspectiveId || DEFAULT_PERSPECTIVE_ID,
+      nextSearchScope: searchScope || urlState.nextSearchScope || DEFAULT_SCOPE,
+      nextSort: sort || urlState.nextSort || DEFAULT_SORT,
       nextFacetFilters: facetFilters,
       nextFilterAvailableTitles: filterAvailableTitles,
     };
@@ -631,7 +634,11 @@ export default function OclcSearchPage() {
                       <article className="oba-result-item" key={`${item.id || item.frbrId}-${index}`}>
                         {item.detailHref ? (
                           <Link href={detailHref} className="oba-result-cover-link">
-                            {image ? <img src={image} alt={title || "Cover"} className="oba-result-cover" /> : <div className="oba-result-cover empty-cover">Geen cover</div>}
+                            {image ? (
+                              <img src={image} alt={title || "Cover"} className="oba-result-cover" />
+                            ) : (
+                              <div className="oba-result-cover empty-cover">Geen cover</div>
+                            )}
                           </Link>
                         ) : (
                           <div className="oba-result-cover empty-cover">Geen detail-id</div>
