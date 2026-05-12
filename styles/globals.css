@@ -772,3 +772,135 @@ button.oba-chip {
     flex: 1;
   }
 }
+
+/* Voorselectiepagina */
+
+.preselect-page {
+  padding-top: 48px;
+  padding-bottom: 72px;
+}
+
+.preselect-intro {
+  max-width: 860px;
+  margin-bottom: 48px;
+}
+
+.preselect-kicker {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e30613;
+}
+
+.preselect-intro h1 {
+  margin: 0 0 18px;
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 400;
+}
+
+.preselect-intro p {
+  margin: 0 0 12px;
+  max-width: 760px;
+  font-size: 18px;
+  color: #333;
+}
+
+.preselect-contact a {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.preselect-section {
+  margin-top: 44px;
+}
+
+.preselect-section h2 {
+  margin: 0 0 18px;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 400;
+}
+
+.preselect-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.preselect-card {
+  min-height: 210px;
+  display: block;
+  padding: 22px;
+  border-radius: 22px;
+  background: #e8e8e8;
+  text-decoration: none;
+  color: inherit;
+}
+
+.preselect-card.linked {
+  border: 1px solid transparent;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.preselect-card.linked:hover {
+  transform: translateY(-2px);
+  border-color: #111;
+  background: #f0f0f0;
+}
+
+.preselect-card.disabled {
+  color: #666;
+  background: #f3f3f3;
+}
+
+.preselect-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.preselect-card h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.preselect-card p {
+  margin: 0;
+  color: #333;
+}
+
+.preselect-card.disabled p {
+  color: #666;
+}
+
+.preselect-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #d8d8d8;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.preselect-status.active {
+  background: #111;
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .preselect-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preselect-intro h1 {
+    font-size: 42px;
+  }
+}

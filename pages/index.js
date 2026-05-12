@@ -1,0 +1,126 @@
+import Link from "next/link";
+
+const detailOptions = [
+  {
+    label: "IST oba.nl detailpagina",
+    description:
+      "OCLC Wise data wordt geladen in een mock-up oba.nl detailpagina met de filters en facetten as-is gedefinieerd door GB.",
+    href: "/oba-detail/842851",
+    status: "Beschikbaar",
+  },
+  {
+    label: "ALL oba.nl detailpagina",
+    description:
+      "OCLC Wise data wordt geladen in een mock-up oba.nl detailpagina met alle mogelijke filters en facetten uit OCLC Wise endpoints.",
+    status: "Nog te implementeren",
+  },
+  {
+    label: "SOLL oba.nl detailpagina",
+    description:
+      "OCLC Wise data wordt geladen in een mock-up oba.nl detailpagina met de filters en facetten gedefinieerd door OBA.",
+    status: "Nog te implementeren",
+  },
+];
+
+const searchOptions = [
+  {
+    label: "IST oba.nl zoekpagina",
+    description:
+      "OCLC Wise data wordt geladen in een mock-up oba.nl zoekpagina met de filters en facetten as-is gedefinieerd door GB.",
+    href: "/oba-search",
+    status: "Beschikbaar",
+  },
+  {
+    label: "ALL oba.nl zoekpagina",
+    description:
+      "OCLC Wise data wordt geladen in een mock-up oba.nl zoekpagina met alle mogelijke filters en facetten uit OCLC Wise endpoints.",
+    href: "/oclc-search",
+    status: "Beschikbaar",
+  },
+  {
+    label: "SOLL oba.nl zoekpagina",
+    description:
+      "OCLC Wise data wordt geladen in een mock-up oba.nl zoekpagina met de filters en facetten gedefinieerd door OBA.",
+    status: "Nog te implementeren",
+  },
+];
+
+const oldSchoolOptions = [
+  {
+    label: "OLD SCHOOL voorselectie zoekbalk",
+    description:
+      "Filters voor locaties en aanwezigheid op basis van OCLC Wise filters en facetten zoals Aquabrowser voorselectie.",
+    status: "Nog te implementeren",
+  },
+  {
+    label: "OLD SCHOOL uitgebreid zoeken",
+    description:
+      "Filters en facetten op basis van OCLC Wise filters en facetten zoals Aquabrowser uitgebreid zoeken.",
+    status: "Nog te implementeren",
+  },
+];
+
+function OptionCard({ option }) {
+  const content = (
+    <>
+      <div className="preselect-card-top">
+        <h3>{option.label}</h3>
+        <span className={option.href ? "preselect-status active" : "preselect-status"}>
+          {option.status}
+        </span>
+      </div>
+      <p>{option.description}</p>
+    </>
+  );
+
+  if (!option.href) {
+    return <article className="preselect-card disabled">{content}</article>;
+  }
+
+  return (
+    <Link href={option.href} className="preselect-card linked">
+      {content}
+    </Link>
+  );
+}
+
+function OptionSection({ title, options }) {
+  return (
+    <section className="preselect-section">
+      <h2>{title}</h2>
+      <div className="preselect-grid">
+        {options.map((option) => (
+          <OptionCard key={option.label} option={option} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <main>
+      <div className="header-image">
+        <img src="/header.JPG" alt="OBA" />
+      </div>
+
+      <div className="container preselect-page">
+        <section className="preselect-intro">
+          <p className="preselect-kicker">OBA ontwikkelomgeving</p>
+          <h1>OCLC Wise testomgeving voor o.s. oba.nl</h1>
+          <p>
+            In deze omgeving wordt OCLC Wise testdata geladen in een mock-up oba.nl design,
+            zowel voor de huidige IST-situatie als voor de toekomstige eis/wens SOLL voor oba.nl.
+          </p>
+          <p className="preselect-contact">
+            Vragen: <a href="mailto:m.vos@oba.nl">m.vos@oba.nl</a>
+          </p>
+        </section>
+
+        <OptionSection title="Detailpagina" options={detailOptions} />
+        <OptionSection title="Zoekpagina" options={searchOptions} />
+        <OptionSection title="Old school Aquabrowser" options={oldSchoolOptions} />
+      </div>
+    </main>
+  );
+}
