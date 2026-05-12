@@ -125,6 +125,7 @@ export default function OclcSearchPage() {
   const [searchScope, setSearchScope] = useState(DEFAULT_SCOPE);
   const [sort, setSort] = useState(DEFAULT_SORT);
   const [facetFilters, setFacetFilters] = useState([]);
+  const [wiseFilter, setWiseFilter] = useState("");
 
   const page = Number(router.query.page || 1);
 
@@ -137,12 +138,14 @@ export default function OclcSearchPage() {
     const scope = typeof router.query.searchScope === "string" ? router.query.searchScope : DEFAULT_SCOPE;
     const sortValue = typeof router.query.sort === "string" ? router.query.sort : DEFAULT_SORT;
     const filters = asArray(router.query.facetFilter).map(text).filter(Boolean);
+    const filterValue = typeof router.query.filter === "string" ? router.query.filter : "";
 
     setQuery(q);
     setPerspectiveId(p);
     setSearchScope(scope);
     setSort(sortValue);
     setFacetFilters(filters);
+    setWiseFilter(filterValue);
 
     runSearch({
       q,
@@ -151,6 +154,7 @@ export default function OclcSearchPage() {
       nextSearchScope: scope,
       nextSort: sortValue,
       nextFacetFilters: filters,
+      nextWiseFilter: filterValue,
       replaceUrl: false,
     });
   }, [
@@ -161,6 +165,7 @@ export default function OclcSearchPage() {
     router.query.searchScope,
     router.query.sort,
     router.query.facetFilter,
+    router.query.filter,
   ]);
 
   useEffect(() => {
@@ -198,6 +203,7 @@ export default function OclcSearchPage() {
     nextSearchScope,
     nextSort,
     nextFacetFilters,
+    nextWiseFilter,
   }) {
     const params = new URLSearchParams();
 
@@ -211,6 +217,8 @@ export default function OclcSearchPage() {
       if (text(filter)) params.append("facetFilter", text(filter));
     });
 
+    if (text(nextWiseFilter)) params.set("filter", text(nextWiseFilter));
+
     return `/oclc-search?${params.toString()}`;
   }
 
@@ -221,6 +229,7 @@ export default function OclcSearchPage() {
     nextSearchScope,
     nextSort,
     nextFacetFilters,
+    nextWiseFilter,
   }) {
     const params = new URLSearchParams();
 
@@ -235,6 +244,8 @@ export default function OclcSearchPage() {
       if (text(filter)) params.append("facetFilter", text(filter));
     });
 
+    if (text(nextWiseFilter)) params.set("filter", text(nextWiseFilter));
+
     return `/api/oclc-search?${params.toString()}`;
   }
 
@@ -245,6 +256,7 @@ export default function OclcSearchPage() {
     nextSearchScope = searchScope,
     nextSort = sort,
     nextFacetFilters = facetFilters,
+    nextWiseFilter = wiseFilter,
     replaceUrl = true,
   } = {}) {
     setLoading(true);
@@ -259,6 +271,7 @@ export default function OclcSearchPage() {
         nextSearchScope,
         nextSort,
         nextFacetFilters,
+        nextWiseFilter,
       })
     )
       .then(async (response) => {
@@ -282,6 +295,7 @@ export default function OclcSearchPage() {
               nextSearchScope,
               nextSort,
               nextFacetFilters,
+              nextWiseFilter,
             }),
             undefined,
             { shallow: true }
@@ -304,30 +318,35 @@ export default function OclcSearchPage() {
   function searchFullCollection() {
     setQuery("*.*");
     setFacetFilters([]);
-    runSearch({ q: "*.*", nextPage: 1, nextFacetFilters: [] });
+    setWiseFilter("");
+    runSearch({ q: "*.*", nextPage: 1, nextFacetFilters: [], nextWiseFilter: "" });
   }
 
   function changePerspective(nextPerspectiveId) {
     setPerspectiveId(nextPerspectiveId);
     setFacetFilters([]);
+    setWiseFilter("");
 
     runSearch({
       q: query,
       nextPage: 1,
       nextPerspectiveId,
       nextFacetFilters: [],
+      nextWiseFilter: "",
     });
   }
 
   function changeScope(nextScope) {
     setSearchScope(nextScope);
     setFacetFilters([]);
+    setWiseFilter("");
 
     runSearch({
       q: query,
       nextPage: 1,
       nextSearchScope: nextScope,
       nextFacetFilters: [],
+      nextWiseFilter: "",
     });
   }
 
@@ -420,7 +439,8 @@ export default function OclcSearchPage() {
                     setQuery("");
                     setSuggestions([]);
                     setFacetFilters([]);
-                    runSearch({ q: "", nextPage: 1, nextFacetFilters: [] });
+                    setWiseFilter("");
+                    runSearch({ q: "", nextPage: 1, nextFacetFilters: [], nextWiseFilter: "" });
                   }}
                 >
                   ×
@@ -438,7 +458,8 @@ export default function OclcSearchPage() {
                       onClick={() => {
                         setQuery(suggestion);
                         setFacetFilters([]);
-                        runSearch({ q: suggestion, nextPage: 1, nextFacetFilters: [] });
+                        setWiseFilter("");
+                        runSearch({ q: suggestion, nextPage: 1, nextFacetFilters: [], nextWiseFilter: "" });
                       }}
                     >
                       {suggestion}
