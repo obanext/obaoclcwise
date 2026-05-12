@@ -70,27 +70,20 @@ function readBooleanQuery(value) {
   const normalized = text(Array.isArray(value) ? value[0] : value).toLowerCase();
   return normalized === "true" || normalized === "1";
 }
+function parseSearchStateFromPath(asPath = "") {
+  const queryString = String(asPath).split("?")[1] || "";
+  const params = new URLSearchParams(queryString);
 
-function parseSearchStateFromQuery(queryObject = {}) {
-  const rawFilters = asArray(queryObject.facetFilter).map(text).filter(Boolean);
+  const rawFilters = params.getAll("facetFilter").map(text).filter(Boolean);
   const availableFromFacet = rawFilters.includes("availableNow:AT_THE_LIBRARY");
-  const availableFromQuery = readBooleanQuery(queryObject.filterAvailableTitles);
+  const availableFromQuery = readBooleanQuery(params.get("filterAvailableTitles"));
 
   return {
-    q: typeof queryObject.q === "string" ? queryObject.q : "",
-    nextPage: Math.max(Number(queryObject.page || 1) || 1, 1),
-    nextPerspectiveId:
-      typeof queryObject.perspectiveId === "string" && queryObject.perspectiveId
-        ? queryObject.perspectiveId
-        : DEFAULT_PERSPECTIVE_ID,
-    nextSearchScope:
-      typeof queryObject.searchScope === "string" && queryObject.searchScope
-        ? queryObject.searchScope
-        : DEFAULT_SCOPE,
-    nextSort:
-      typeof queryObject.sort === "string" && queryObject.sort
-        ? queryObject.sort
-        : DEFAULT_SORT,
+    q: params.get("q") || "",
+    nextPage: Math.max(Number(params.get("page") || 1) || 1, 1),
+    nextPerspectiveId: params.get("perspectiveId") || DEFAULT_PERSPECTIVE_ID,
+    nextSearchScope: params.get("searchScope") || DEFAULT_SCOPE,
+    nextSort: params.get("sort") || DEFAULT_SORT,
     nextFacetFilters: rawFilters.filter((filter) => filter !== "availableNow:AT_THE_LIBRARY"),
     nextFilterAvailableTitles: availableFromQuery || availableFromFacet,
   };
@@ -162,7 +155,7 @@ export default function OclcSearchPage() {
   useEffect(() => {
     if (!router.isReady) return;
 
-    const urlState = parseSearchStateFromQuery(router.query);
+   const urlState = parseSearchStateFromPath(router.asPath);
 
     setQuery(urlState.q);
     setPerspectiveId(urlState.nextPerspectiveId);
