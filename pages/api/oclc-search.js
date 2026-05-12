@@ -326,6 +326,7 @@ function normalizeSearchResponse({
   selectedSearchScope,
   selectedSort,
   selectedFacetFilters,
+  selectedFilterAvailableTitles,
   perspectiveCall,
   searchCall,
 }) {
@@ -343,6 +344,7 @@ function normalizeSearchResponse({
     selectedSearchScope: text(selectedSearchScope),
     selectedSort: text(selectedSort),
     selectedFacetFilters: asArray(selectedFacetFilters).map(text).filter(Boolean),
+    selectedFilterAvailableTitles: Boolean(selectedFilterAvailableTitles),
     pagination: {
       page: pageNumber,
       offset,
@@ -391,7 +393,12 @@ export default async function handler(req, res) {
   const selectedPerspectiveId = text(perspectiveId || DEFAULT_PERSPECTIVE_ID);
   const selectedSearchScope = text(searchScope || DEFAULT_SCOPE);
   const selectedSort = text(sort || DEFAULT_SORT);
-  const selectedFacetFilters = asArray(facetFilter).map(text).filter(Boolean);
+  const rawFacetFilters = asArray(facetFilter).map(text).filter(Boolean);
+  const selectedFilterAvailableTitles =
+    text(filterAvailableTitles).toLowerCase() === "true" ||
+    text(filterAvailableTitles) === "1" ||
+    rawFacetFilters.includes("availableNow:AT_THE_LIBRARY");
+  const selectedFacetFilters = rawFacetFilters.filter((value) => value !== "availableNow:AT_THE_LIBRARY");
 
   const perspectiveUrl = `${BASE}/branch/${encodeURIComponent(BRANCH_ID)}/clienttype/${encodeURIComponent(CLIENT_TYPE)}/perspective`;
   const perspectiveCall = await fetchSafe(perspectiveUrl);
@@ -414,6 +421,7 @@ export default async function handler(req, res) {
         selectedSearchScope,
         selectedSort,
         selectedFacetFilters,
+        selectedFilterAvailableTitles,
         perspectiveCall,
         searchCall: null,
       })
@@ -427,7 +435,7 @@ export default async function handler(req, res) {
     `&offset=${offset}` +
     `&limit=${limitNumber}` +
     `&searchScope=${encodeURIComponent(selectedSearchScope)}` +
-    `&filterAvailableTitles=${encodeURIComponent(filterAvailableTitles)}` +
+    `&filterAvailableTitles=${encodeURIComponent(selectedFilterAvailableTitles ? "true" : "false")}` +
     `&enableMultiSelectFaceting=true`;
 
   titleSummaryUrl = appendRepeatedParam(titleSummaryUrl, "facetFilter", selectedFacetFilters);
@@ -451,6 +459,7 @@ export default async function handler(req, res) {
       selectedSearchScope,
       selectedSort,
       selectedFacetFilters,
+      selectedFilterAvailableTitles,
       perspectiveCall,
       searchCall,
     })
