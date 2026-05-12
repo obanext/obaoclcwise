@@ -48,6 +48,17 @@ function rawFacetValueMeta(option = {}) {
   return text(option.facetFilter);
 }
 
+function rawFacetFilterValue(facet = {}, option = {}) {
+  const existing = text(option.facetFilter);
+  if (existing) return existing;
+
+  const facetName = text(facet.name || option.key);
+  const term = text(option.term || option.value || option.id || option.label);
+
+  if (facetName && term) return `${facetName}:${term}`;
+  return "";
+}
+
 function itemTitle(item = {}) {
   return text(item.title || item.mainTitle || item.childTitleList?.[0]?.childTitle);
 }
@@ -502,14 +513,15 @@ export default function OclcSearchPage() {
                       {visibleValues.map((option) => {
                         const valueLabel = rawFacetValueLabel(option);
                         const valueMeta = rawFacetValueMeta(option);
-                        const checked = selectedFilters.has(option.facetFilter);
+                        const filterValue = rawFacetFilterValue(facet, option);
+                        const checked = selectedFilters.has(filterValue);
 
                         return (
                           <button
-                            key={`${key}-${option.facetFilter}-${option.label}`}
+                            key={`${key}-${filterValue}-${option.label}`}
                             type="button"
                             className={checked ? "filter-checkbox active" : "filter-checkbox"}
-                            onClick={() => toggleFacet(option.facetFilter)}
+                            onClick={() => toggleFacet(filterValue)}
                           >
                             <span className="checkbox-dot" />
                             <span className="filter-label">
