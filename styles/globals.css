@@ -1117,3 +1117,12 @@ button.oba-chip {
     grid-template-columns: 1fr;
   }
 }
+
+.oclc-raw-filter-value {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #666;
+  word-break: break-word;
+}
