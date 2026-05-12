@@ -1,2 +1,2 @@
-# detailtest
-test van detailpagina op oclc enpoints
+# oclcwise endpoints op oba
+
