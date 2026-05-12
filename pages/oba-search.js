@@ -62,13 +62,16 @@ function sortLabel(sort = {}) {
 }
 
 function extractFacetGroups(searchResponse = {}, perspectives = [], selectedPerspectiveId = "") {
+  const safeSearchResponse =
+    searchResponse && typeof searchResponse === "object" ? searchResponse : {};
+
   const rawGroups =
-    searchResponse.facets ||
-    searchResponse.facet ||
-    searchResponse.filters ||
-    searchResponse.filter ||
-    searchResponse.refinements ||
-    searchResponse.refinement ||
+    safeSearchResponse.facets ||
+    safeSearchResponse.facet ||
+    safeSearchResponse.filters ||
+    safeSearchResponse.filter ||
+    safeSearchResponse.refinements ||
+    safeSearchResponse.refinement ||
     [];
 
   const groups = asArray(rawGroups)

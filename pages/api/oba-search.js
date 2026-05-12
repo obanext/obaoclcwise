@@ -171,7 +171,7 @@ export default async function handler(req, res) {
       selectedSearchScope: String(searchScope || DEFAULT_SCOPE),
       selectedSort: "",
       selectedFacetFilters: asArray(facetFilter),
-      searchResponse: null,
+      searchResponse: {},
       resolvedItems: [],
       debug: {
         calls: [perspectiveCall],
