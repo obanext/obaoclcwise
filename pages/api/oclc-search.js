@@ -326,7 +326,6 @@ function normalizeSearchResponse({
   selectedSearchScope,
   selectedSort,
   selectedFacetFilters,
-  selectedWiseFilter,
   perspectiveCall,
   searchCall,
 }) {
@@ -344,7 +343,6 @@ function normalizeSearchResponse({
     selectedSearchScope: text(selectedSearchScope),
     selectedSort: text(selectedSort),
     selectedFacetFilters: asArray(selectedFacetFilters).map(text).filter(Boolean),
-    selectedWiseFilter: text(selectedWiseFilter),
     pagination: {
       page: pageNumber,
       offset,
@@ -378,7 +376,6 @@ export default async function handler(req, res) {
     searchScope = DEFAULT_SCOPE,
     sort = DEFAULT_SORT,
     facetFilter = [],
-    filter = "",
     filterAvailableTitles = "false",
   } = req.query;
 
@@ -395,7 +392,6 @@ export default async function handler(req, res) {
   const selectedSearchScope = text(searchScope || DEFAULT_SCOPE);
   const selectedSort = text(sort || DEFAULT_SORT);
   const selectedFacetFilters = asArray(facetFilter).map(text).filter(Boolean);
-  const selectedWiseFilter = text(filter);
 
   const perspectiveUrl = `${BASE}/branch/${encodeURIComponent(BRANCH_ID)}/clienttype/${encodeURIComponent(CLIENT_TYPE)}/perspective`;
   const perspectiveCall = await fetchSafe(perspectiveUrl);
@@ -418,7 +414,6 @@ export default async function handler(req, res) {
         selectedSearchScope,
         selectedSort,
         selectedFacetFilters,
-        selectedWiseFilter,
         perspectiveCall,
         searchCall: null,
       })
@@ -436,7 +431,6 @@ export default async function handler(req, res) {
     `&enableMultiSelectFaceting=true`;
 
   titleSummaryUrl = appendRepeatedParam(titleSummaryUrl, "facetFilter", selectedFacetFilters);
-  titleSummaryUrl = appendParam(titleSummaryUrl, "filter", selectedWiseFilter);
 
   const searchCall = await fetchSafe(titleSummaryUrl);
 
@@ -457,7 +451,6 @@ export default async function handler(req, res) {
       selectedSearchScope,
       selectedSort,
       selectedFacetFilters,
-      selectedWiseFilter,
       perspectiveCall,
       searchCall,
     })
