@@ -49,8 +49,9 @@ const oldSchoolOptions = [
   {
     label: "OLD SCHOOL voorselectie zoekbalk",
     description:
-      "Filters voor locaties en aanwezigheid op basis van OCLC Wise filters en facetten zoals Aquabrowser voorselectie.",
-    status: "Nog te implementeren",
+      "Voorselectie op basis van OCLC Wise perspectives en branchId-facetten, zoals Aquabrowser voorselectie.",
+    href: "/old-school-search",
+    status: "Beschikbaar",
   },
   {
     label: "OLD SCHOOL uitgebreid zoeken",
