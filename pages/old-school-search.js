@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/router";
 
 const DEFAULT_SEARCH_SCOPE = "anything";
-const DEFAULT_CATALOG_PERSPECTIVE_ID = "3687";
+const DEFAULT_CATALOG_PERSPECTIVE_ID = "3682";
 const DEFAULT_BRANCH_PERSPECTIVE_ID = "3682";
 
 const CATALOG_OPTIONS = [
