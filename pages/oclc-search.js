@@ -132,6 +132,7 @@ export default function OclcSearchPage() {
     if (!router.isReady) return;
 
     const q = typeof router.query.q === "string" ? router.query.q : "";
+    const nextPage = Number(router.query.page || 1);
     const p = typeof router.query.perspectiveId === "string" ? router.query.perspectiveId : DEFAULT_PERSPECTIVE_ID;
     const scope = typeof router.query.searchScope === "string" ? router.query.searchScope : DEFAULT_SCOPE;
     const sortValue = typeof router.query.sort === "string" ? router.query.sort : DEFAULT_SORT;
@@ -145,14 +146,22 @@ export default function OclcSearchPage() {
 
     runSearch({
       q,
-      nextPage: page,
+      nextPage,
       nextPerspectiveId: p,
       nextSearchScope: scope,
       nextSort: sortValue,
       nextFacetFilters: filters,
       replaceUrl: false,
     });
-  }, [router.isReady]);
+  }, [
+    router.isReady,
+    router.query.q,
+    router.query.page,
+    router.query.perspectiveId,
+    router.query.searchScope,
+    router.query.sort,
+    router.query.facetFilter,
+  ]);
 
   useEffect(() => {
     const q = query.trim();

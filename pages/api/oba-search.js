@@ -2,7 +2,7 @@ import { mapWiseSearchToObaFull } from "../../mapping/mapWiseSearchToObaFull";
 
 const BASE = "https://bibliotheek-accept1.wise.oclc.org/restapi";
 const BRANCH_ID = "1000";
-const DEFAULT_PERSPECTIVE_ID = "";
+const DEFAULT_PERSPECTIVE_ID = "3687";
 const DEFAULT_SCOPE = "anything";
 
 const searchHeaders = {
