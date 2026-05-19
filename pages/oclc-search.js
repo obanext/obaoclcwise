@@ -76,6 +76,7 @@ function parseSearchStateFromPath(asPath = "") {
   const params = new URLSearchParams(queryString);
 
   const rawFilters = params.getAll("facetFilter").map(text).filter(Boolean);
+  const rawTermFilters = params.getAll("termFilter").map(text).filter(Boolean);
   const availableFromFacet = rawFilters.includes("availableNow:AT_THE_LIBRARY");
   const availableFromQuery = readBooleanQuery(params.get("filterAvailableTitles"));
 
@@ -86,6 +87,7 @@ function parseSearchStateFromPath(asPath = "") {
     nextSearchScope: params.get("searchScope") || DEFAULT_SCOPE,
     nextSort: params.get("sort") || DEFAULT_SORT,
     nextFacetFilters: rawFilters.filter((filter) => filter !== "availableNow:AT_THE_LIBRARY"),
+    nextTermFilters: rawTermFilters,
     nextFilterAvailableTitles: availableFromQuery || availableFromFacet,
   };
 }
@@ -149,6 +151,7 @@ export default function OclcSearchPage() {
   const [searchScope, setSearchScope] = useState(DEFAULT_SCOPE);
   const [sort, setSort] = useState(DEFAULT_SORT);
   const [facetFilters, setFacetFilters] = useState([]);
+  const [termFilters, setTermFilters] = useState([]);
   const [filterAvailableTitles, setFilterAvailableTitles] = useState(false);
 
   const page = Number(router.query.page || 1);
@@ -163,6 +166,7 @@ export default function OclcSearchPage() {
     setSearchScope(urlState.nextSearchScope);
     setSort(urlState.nextSort);
     setFacetFilters(urlState.nextFacetFilters);
+    setTermFilters(urlState.nextTermFilters);
     setFilterAvailableTitles(urlState.nextFilterAvailableTitles);
 
     runSearchFromState(urlState);
@@ -206,6 +210,7 @@ export default function OclcSearchPage() {
       nextSearchScope: searchScope || urlState.nextSearchScope || DEFAULT_SCOPE,
       nextSort: sort || urlState.nextSort || DEFAULT_SORT,
       nextFacetFilters: facetFilters,
+      nextTermFilters: termFilters,
       nextFilterAvailableTitles: filterAvailableTitles,
     };
   }
@@ -217,6 +222,7 @@ export default function OclcSearchPage() {
     nextSearchScope,
     nextSort,
     nextFacetFilters,
+    nextTermFilters,
     nextFilterAvailableTitles,
   }) {
     const params = new URLSearchParams();
@@ -229,6 +235,10 @@ export default function OclcSearchPage() {
 
     asArray(nextFacetFilters).forEach((filter) => {
       if (text(filter)) params.append("facetFilter", text(filter));
+    });
+
+    asArray(nextTermFilters).forEach((filter) => {
+      if (text(filter)) params.append("termFilter", text(filter));
     });
 
     if (nextFilterAvailableTitles) {
@@ -245,6 +255,7 @@ export default function OclcSearchPage() {
     nextSearchScope,
     nextSort,
     nextFacetFilters,
+    nextTermFilters,
     nextFilterAvailableTitles,
   }) {
     const params = new URLSearchParams();
@@ -259,6 +270,10 @@ export default function OclcSearchPage() {
 
     asArray(nextFacetFilters).forEach((filter) => {
       if (text(filter)) params.append("facetFilter", text(filter));
+    });
+
+    asArray(nextTermFilters).forEach((filter) => {
+      if (text(filter)) params.append("termFilter", text(filter));
     });
 
     return `/api/oclc-search?${params.toString()}`;
@@ -301,7 +316,7 @@ export default function OclcSearchPage() {
 
   function submit(event) {
     event.preventDefault();
-    navigateSearch({ q: query, nextPage: 1 });
+    navigateSearch({ q: query, nextPage: 1, nextTermFilters: [] });
   }
 
   function searchFullCollection() {
@@ -309,6 +324,7 @@ export default function OclcSearchPage() {
       q: "*.*",
       nextPage: 1,
       nextFacetFilters: [],
+      nextTermFilters: [],
       nextFilterAvailableTitles: false,
     });
   }
@@ -319,6 +335,7 @@ export default function OclcSearchPage() {
       nextPage: 1,
       nextPerspectiveId,
       nextFacetFilters: [],
+      nextTermFilters: [],
       nextFilterAvailableTitles: false,
     });
   }
@@ -329,6 +346,7 @@ export default function OclcSearchPage() {
       nextPage: 1,
       nextSearchScope: nextScope,
       nextFacetFilters: [],
+      nextTermFilters: [],
       nextFilterAvailableTitles: false,
     });
   }
@@ -431,6 +449,7 @@ export default function OclcSearchPage() {
                       q: "",
                       nextPage: 1,
                       nextFacetFilters: [],
+                      nextTermFilters: [],
                       nextFilterAvailableTitles: false,
                     });
                   }}
@@ -453,6 +472,7 @@ export default function OclcSearchPage() {
                           q: suggestion,
                           nextPage: 1,
                           nextFacetFilters: [],
+                          nextTermFilters: [],
                           nextFilterAvailableTitles: false,
                         });
                       }}

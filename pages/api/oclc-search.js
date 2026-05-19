@@ -326,6 +326,7 @@ function normalizeSearchResponse({
   selectedSearchScope,
   selectedSort,
   selectedFacetFilters,
+  selectedTermFilters,
   selectedFilterAvailableTitles,
   perspectiveCall,
   searchCall,
@@ -344,6 +345,7 @@ function normalizeSearchResponse({
     selectedSearchScope: text(selectedSearchScope),
     selectedSort: text(selectedSort),
     selectedFacetFilters: asArray(selectedFacetFilters).map(text).filter(Boolean),
+    selectedTermFilters: asArray(selectedTermFilters).map(text).filter(Boolean),
     selectedFilterAvailableTitles: Boolean(selectedFilterAvailableTitles),
     pagination: {
       page: pageNumber,
@@ -378,6 +380,7 @@ export default async function handler(req, res) {
     searchScope = DEFAULT_SCOPE,
     sort = DEFAULT_SORT,
     facetFilter = [],
+    termFilter = [],
     filterAvailableTitles = "false",
   } = req.query;
 
@@ -394,6 +397,7 @@ export default async function handler(req, res) {
   const selectedSearchScope = text(searchScope || DEFAULT_SCOPE);
   const selectedSort = text(sort || DEFAULT_SORT);
   const rawFacetFilters = asArray(facetFilter).map(text).filter(Boolean);
+  const selectedTermFilters = asArray(termFilter).map(text).filter(Boolean);
   const selectedFilterAvailableTitles =
     text(filterAvailableTitles).toLowerCase() === "true" ||
     text(filterAvailableTitles) === "1" ||
@@ -410,7 +414,7 @@ export default async function handler(req, res) {
     });
   }
 
-  if (!query) {
+  if (!query && !selectedTermFilters.length) {
     return res.status(200).json(
       normalizeSearchResponse({
         query,
@@ -421,6 +425,7 @@ export default async function handler(req, res) {
         selectedSearchScope,
         selectedSort,
         selectedFacetFilters,
+        selectedTermFilters,
         selectedFilterAvailableTitles,
         perspectiveCall,
         searchCall: null,
@@ -428,19 +433,26 @@ export default async function handler(req, res) {
     );
   }
 
-  let titleSummaryUrl =
-    `${BASE}/branch/${encodeURIComponent(BRANCH_ID)}/perspective/${encodeURIComponent(selectedPerspectiveId)}/titlesummary` +
+  const useSearchEndpoint = selectedTermFilters.length > 0;
+  let searchUrl =
+    `${BASE}/branch/${encodeURIComponent(BRANCH_ID)}/perspective/${encodeURIComponent(selectedPerspectiveId)}/${
+      useSearchEndpoint ? "search" : "titlesummary"
+    }` +
     `?returnType=default` +
-    `&term=${encodeURIComponent(query)}` +
     `&offset=${offset}` +
     `&limit=${limitNumber}` +
     `&searchScope=${encodeURIComponent(selectedSearchScope)}` +
     `&filterAvailableTitles=${encodeURIComponent(selectedFilterAvailableTitles ? "true" : "false")}` +
     `&enableMultiSelectFaceting=true`;
 
-  titleSummaryUrl = appendRepeatedParam(titleSummaryUrl, "facetFilter", selectedFacetFilters);
+  if (query && !(useSearchEndpoint && query === "*.*")) {
+    searchUrl = appendParam(searchUrl, "term", query);
+  }
 
-  const searchCall = await fetchSafe(titleSummaryUrl);
+  searchUrl = appendRepeatedParam(searchUrl, "facetFilter", selectedFacetFilters);
+  searchUrl = appendRepeatedParam(searchUrl, "termFilter", selectedTermFilters);
+
+  const searchCall = await fetchSafe(searchUrl);
 
   if (!searchCall.ok) {
     return res.status(searchCall.status || 500).json({
@@ -459,6 +471,7 @@ export default async function handler(req, res) {
       selectedSearchScope,
       selectedSort,
       selectedFacetFilters,
+      selectedTermFilters,
       selectedFilterAvailableTitles,
       perspectiveCall,
       searchCall,

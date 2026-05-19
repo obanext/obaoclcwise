@@ -114,6 +114,16 @@ function normalizeIsbn(value) {
   return text(value).replace(/[\s-]/g, "");
 }
 
+function normalizeIdentifier(value) {
+  return text(value).replace(/[\s-]/g, "");
+}
+
+function termFilter(field, value) {
+  const clean = text(value);
+  if (!field || !clean) return "";
+  return `${field}:${clean}`;
+}
+
 function determinePrimarySearch(form) {
   const free = text(form.q);
 
@@ -137,15 +147,15 @@ function determinePrimarySearch(form) {
     form.audienceCode,
   ].filter((value) => text(value));
 
-  const termFilterFields = [form.isbn].filter((value) => text(value));
-
-  const unsupportedTextFields = [
-    form.placementCode,
+  const termFilterFields = [
+    form.isbn,
     form.issn,
     form.publisher,
-    form.collection,
+    form.placementCode,
     form.content,
   ].filter((value) => text(value));
+
+  const unsupportedTextFields = [form.collection].filter((value) => text(value));
 
   if (
     scopedFields.length === 1 &&
@@ -180,6 +190,10 @@ function buildOclcSearchUrl(form) {
 
   const termFilters = [
     normalizeIsbn(form.isbn) ? `isbn:${normalizeIsbn(form.isbn)}` : "",
+    normalizeIdentifier(form.issn) ? `issn:${normalizeIdentifier(form.issn)}` : "",
+    termFilter("publisher", form.publisher),
+    termFilter("placementCode", form.placementCode),
+    termFilter("content", form.content),
   ].filter(Boolean);
 
   params.set("q", primary.q);
