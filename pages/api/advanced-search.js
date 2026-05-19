@@ -5,7 +5,7 @@ const DEFAULT_SCOPE = "anything";
 
 const headers = {
   Accept: "application/json",
-  wise_key: process.env.WISE_SEARCH_KEY,
+  wise_key: process.env.WISE_KEY,
 };
 
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
