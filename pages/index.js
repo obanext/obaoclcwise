@@ -56,8 +56,9 @@ const oldSchoolOptions = [
   {
     label: "OLD SCHOOL uitgebreid zoeken",
     description:
-      "Filters en facetten op basis van OCLC Wise filters en facetten zoals Aquabrowser uitgebreid zoeken.",
-    status: "Nog te implementeren",
+      "Uitgebreid zoeken op basis van OCLC Wise search, searchScopes en facetFilters. Werkt ook zonder vrije zoekterm.",
+    href: "/uitgebreid-zoeken",
+    status: "Beschikbaar",
   },
 ];
 
