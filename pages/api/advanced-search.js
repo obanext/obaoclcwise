@@ -1,7 +1,7 @@
 const BASE = process.env.WISE_BASE_URL || "https://bibliotheek-accept8.wise.oclc.org/restapi";
 const BRANCH_ID = process.env.WISE_BRANCH_ID || "1000";
 const DEFAULT_PERSPECTIVE_ID = process.env.WISE_DEFAULT_PERSPECTIVE_ID || "3682";
-const DEFAULT_LIMIT = 20;
+const DEFAULT_SCOPE = "anything";
 
 const headers = {
   Accept: "application/json",
@@ -17,45 +17,12 @@ const text = (value) => {
 };
 
 function appendParam(url, key, value) {
-  const clean = text(value);
-  if (!clean) return url;
-  return `${url}&${encodeURIComponent(key)}=${encodeURIComponent(clean)}`;
+  if (!text(value)) return url;
+  return `${url}&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
 }
 
 function appendRepeatedParam(url, key, values) {
   return asArray(values).reduce((nextUrl, value) => appendParam(nextUrl, key, value), url);
-}
-
-function yearFacet(value) {
-  const year = text(value);
-  if (!/^\d{4}$/.test(year)) return "";
-  return `publicationYear:${year}-01-01T00:00:00Z`;
-}
-
-function facet(field, value) {
-  const clean = text(value);
-  if (!field || !clean) return "";
-  return `${field}:${clean}`;
-}
-
-function getPrimarySearch(query) {
-  const candidates = [
-    { value: query.q, scope: "anything" },
-    { value: query.title, scope: "title" },
-    { value: query.author, scope: "author" },
-    { value: query.subject, scope: "subject" },
-    { value: query.series, scope: "series" },
-    { value: query.isbn, scope: "anything" },
-    { value: query.issn, scope: "anything" },
-    { value: query.publisher, scope: "anything" },
-    { value: query.content, scope: "anything" },
-    { value: query.placementCode, scope: "anything" },
-  ];
-
-  return candidates.find((candidate) => text(candidate.value)) || {
-    value: "",
-    scope: "anything",
-  };
 }
 
 async function fetchSafe(url) {
@@ -87,12 +54,41 @@ async function fetchSafe(url) {
   }
 }
 
+function yearFacet(value) {
+  const year = text(value);
+  if (!/^\d{4}$/.test(year)) return "";
+  return `publicationYear:${year}-01-01T00:00:00Z`;
+}
+
+function facet(field, value) {
+  const clean = text(value);
+  if (!field || !clean) return "";
+  return `${field}:${clean}`;
+}
+
+function primarySearch(query) {
+  const candidates = [
+    { value: query.q, scope: "anything" },
+    { value: query.title, scope: "title" },
+    { value: query.author, scope: "author" },
+    { value: query.subject, scope: "subject" },
+    { value: query.series, scope: "series" },
+    { value: query.isbn, scope: "anything" },
+    { value: query.issn, scope: "anything" },
+    { value: query.publisher, scope: "anything" },
+    { value: query.placementCode, scope: "anything" },
+    { value: query.content, scope: "anything" },
+  ];
+
+  return candidates.find((item) => text(item.value)) || { value: "", scope: DEFAULT_SCOPE };
+}
+
 export default async function handler(req, res) {
-  const page = Math.max(Number(req.query.page) || 1, 1);
-  const limit = Math.max(Math.min(Number(req.query.limit) || DEFAULT_LIMIT, 50), 1);
-  const offset = (page - 1) * limit;
+  const pageNumber = Math.max(Number(req.query.page) || 1, 1);
+  const limitNumber = Math.max(Math.min(Number(req.query.limit) || 20, 50), 1);
+  const offset = (pageNumber - 1) * limitNumber;
   const perspectiveId = text(req.query.perspectiveId) || DEFAULT_PERSPECTIVE_ID;
-  const primary = getPrimarySearch(req.query);
+  const primary = primarySearch(req.query);
 
   const filters = [
     ...asArray(req.query.facetFilter).map(text).filter(Boolean),
@@ -103,36 +99,29 @@ export default async function handler(req, res) {
     facet("branchId", req.query.branchId),
     facet("audienceCode", req.query.audienceCode),
     facet("targetAudienceCode", req.query.targetAudienceCode),
-    facet("fictionNonfictionCode", req.query.fictionNonfictionCode),
   ].filter(Boolean);
 
-  const hasSearch = text(primary.value) || filters.length || req.query.available === "true";
-
-  if (!hasSearch) {
+  if (!text(primary.value) && !filters.length && req.query.available !== "true") {
     return res.status(200).json({
       query: req.query,
       response: {
         offset,
-        limit,
+        limit: limitNumber,
         total: 0,
         items: [],
         facets: [],
         sortkeys: [],
       },
-      debug: {
-        calls: [],
-        note: "No search submitted because all fields were empty.",
-      },
+      debug: { calls: [] },
     });
   }
 
   let url =
-    `${BASE}/branch/${encodeURIComponent(BRANCH_ID)}` +
-    `/perspective/${encodeURIComponent(perspectiveId)}` +
-    `/search?returnType=default` +
+    `${BASE}/branch/${BRANCH_ID}/perspective/${encodeURIComponent(perspectiveId)}/search` +
+    `?returnType=default` +
     `&offset=${offset}` +
-    `&limit=${limit}` +
-    `&searchScope=${encodeURIComponent(primary.scope)}`;
+    `&limit=${limitNumber}` +
+    `&searchScope=${encodeURIComponent(primary.scope || DEFAULT_SCOPE)}`;
 
   if (text(primary.value)) url = appendParam(url, "term", primary.value);
   if (text(req.query.sort)) url = appendParam(url, "sort", req.query.sort);
@@ -140,15 +129,11 @@ export default async function handler(req, res) {
 
   url = appendRepeatedParam(url, "facetFilter", filters);
 
-  const searchCall = await fetchSafe(url);
+  const call = await fetchSafe(url);
 
-  return res.status(searchCall.ok ? 200 : searchCall.status || 500).json({
+  return res.status(call.ok ? 200 : call.status || 500).json({
     query: req.query,
-    response: searchCall.body,
-    debug: {
-      calls: [searchCall],
-      primary,
-      filters,
-    },
+    response: call.body,
+    debug: { calls: [call] },
   });
 }
