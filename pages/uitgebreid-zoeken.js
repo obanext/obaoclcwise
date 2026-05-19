@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
-
-const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+import { useRouter } from "next/router";
 
 const text = (value) => {
   if (typeof value === "string") return value.trim();
@@ -52,6 +51,7 @@ const BRANCHES = [
 ];
 
 const COLLECTIONS = [["", "Kies een waarde"]];
+
 const YOUTH = [
   ["", "Kies een waarde"],
   ["JN", "Jeugd"],
@@ -104,73 +104,89 @@ function buildQuery(form) {
   return parts.join(" ");
 }
 
-function resultId(item = {}) {
-  return text(item.id).replace(/^GBS:T:/, "");
+function yearFacet(value) {
+  const year = text(value);
+  if (!/^\d{4}$/.test(year)) return "";
+  return `publicationYear:${year}-01-01T00:00:00Z`;
 }
 
-function metadata(item = {}) {
-  return item.metadata || {};
+function determinePrimarySearch(form, queryPreview) {
+  const free = text(form.q);
+
+  if (free) {
+    return { q: free, searchScope: "anything" };
+  }
+
+  const scopedFields = [
+    { name: "title", value: form.title, searchScope: "title" },
+    { name: "author", value: form.author, searchScope: "author" },
+    { name: "subject", value: form.subject, searchScope: "subject" },
+    { name: "series", value: form.series, searchScope: "series" },
+  ].filter((field) => text(field.value));
+
+  const otherTextFields = [
+    form.placementCode,
+    form.issn,
+    form.publisher,
+    form.isbn,
+    form.collection,
+    form.content,
+  ].filter((value) => text(value));
+
+  if (scopedFields.length === 1 && otherTextFields.length === 0) {
+    return { q: text(scopedFields[0].value), searchScope: scopedFields[0].searchScope };
+  }
+
+  if (text(queryPreview)) {
+    return { q: text(queryPreview), searchScope: "anything" };
+  }
+
+  return { q: "*.*", searchScope: "anything" };
+}
+
+function buildOclcSearchUrl(form, queryPreview) {
+  const params = new URLSearchParams();
+  const primary = determinePrimarySearch(form, queryPreview);
+  const filters = [
+    yearFacet(form.year),
+    text(form.genreCode) ? `genreCode:${text(form.genreCode)}` : "",
+    text(form.mediumTypeCode) ? `mediumTypeCode:${text(form.mediumTypeCode)}` : "",
+    text(form.languageCode) ? `languageCode:${text(form.languageCode)}` : "",
+    text(form.branchId) ? `branchId:${text(form.branchId)}` : "",
+    text(form.audienceCode) ? `audienceCode:${text(form.audienceCode)}` : "",
+  ].filter(Boolean);
+
+  params.set("q", primary.q);
+  params.set("page", "1");
+  params.set("searchScope", primary.searchScope);
+  params.set("sort", "2910");
+  params.set("perspectiveId", "3682");
+
+  filters.forEach((filter) => params.append("facetFilter", filter));
+
+  if (form.available) {
+    params.set("filterAvailableTitles", "true");
+  }
+
+  return `/oclc-search?${params.toString()}`;
 }
 
 export default function AdvancedSearchPage() {
+  const router = useRouter();
   const [form, setForm] = useState(emptyForm);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
   const queryPreview = useMemo(() => buildQuery(form), [form]);
-  const response = data?.response || {};
-  const results = asArray(response.items);
-  const total = response.total ?? 0;
 
   function setField(name, value) {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
-  function buildParams() {
-    const params = new URLSearchParams();
-
-    Object.entries(form).forEach(([key, value]) => {
-      if (typeof value === "boolean") {
-        if (value) params.set(key, "true");
-        return;
-      }
-
-      if (text(value)) params.set(key, text(value));
-    });
-
-    params.set("queryPreview", queryPreview);
-    params.set("page", "1");
-    params.set("limit", "20");
-
-    return params;
-  }
-
-  async function submit(event) {
+  function submit(event) {
     event.preventDefault();
-    setLoading(true);
-    setError("");
-
-    try {
-      const searchResponse = await fetch(`/api/advanced-search?${buildParams().toString()}`);
-      const json = await searchResponse.json().catch(() => null);
-
-      if (!searchResponse.ok) {
-        throw new Error(json?.error || `Request failed ${searchResponse.status}`);
-      }
-
-      setData(json);
-    } catch (err) {
-      setError(err.message || "Onbekende fout");
-    } finally {
-      setLoading(false);
-    }
+    router.push(buildOclcSearchUrl(form, queryPreview));
   }
 
   function reset() {
     setForm(emptyForm);
-    setData(null);
-    setError("");
   }
 
   return (
@@ -249,43 +265,10 @@ export default function AdvancedSearchPage() {
           </div>
 
           <div className="advanced-actions">
-            <button type="submit" className="advanced-submit" disabled={loading}>VIND</button>
+            <button type="submit" className="advanced-submit">VIND</button>
             <button type="button" className="advanced-clear" onClick={reset}>WISSEN</button>
           </div>
         </form>
-
-        {error ? <div className="search-error">Fout: {error}</div> : null}
-        {loading ? <div className="search-loading">Zoeken...</div> : null}
-
-        {data ? (
-          <section className="advanced-results">
-            <div className="advanced-results-head"><h2>{total} resultaten</h2></div>
-            <div className="oba-result-list">
-              {results.map((item) => {
-                const meta = metadata(item);
-                const id = resultId(item);
-                const title = text(meta.title);
-                const author = asArray(meta.author).map(text).filter(Boolean).join(", ");
-                const year = text(meta.publicationYear);
-                const medium = asArray(meta.mediumTypeLabel).map(text).filter(Boolean).join(", ");
-                const description = text(meta.description);
-
-                return (
-                  <article className="oba-result-item" key={id || item.id}>
-                    <div>
-                      <Link href={id ? `/oba-detail/${encodeURIComponent(id)}` : "#"} className="oba-result-title">
-                        {title || "Onbekende titel"}
-                      </Link>
-                      {author ? <div className="oba-result-author">{author}</div> : null}
-                      <div className="oba-result-meta">{[year, medium].filter(Boolean).join(" | ")}</div>
-                      {description ? <p className="oba-result-summary">{description}</p> : null}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
       </div>
     </main>
   );
