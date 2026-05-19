@@ -6,8 +6,113 @@ html,
 body {
   margin: 0;
   padding: 0;
-  font-family: Arial, sans-serif;
-  background: #ffffff;
+  font-family: Arial, sans-serif;/* Uitgebreid zoeken */
+
+.advanced-search-page {
+  padding-bottom: 60px;
+}
+
+.advanced-hero {
+  margin: 24px 0 18px;
+}
+
+.advanced-hero h1 {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.05;
+  font-weight: 400;
+}
+
+.advanced-tabs {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 18px;
+  flex-wrap: wrap;
+}
+
+.advanced-tab {
+  border: 1px solid #d7d7d7;
+  background: #fff;
+  color: #111;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 400;
+}
+
+.advanced-tab.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.advanced-tab.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.advanced-card {
+  display: grid;
+  gap: 28px;
+}
+
+.advanced-top-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 14px;
+  align-items: center;
+}
+
+.advanced-filter-list {
+  display: grid;
+  gap: 18px;
+}
+
+.advanced-filter-list label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.advanced-filter-title {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.advanced-filter-list input,
+.advanced-filter-list select {
+  width: 100%;
+  border: 1px solid #d7d7d7;
+  border-radius: 999px;
+  padding: 14px 18px;
+  background: #fff;
+}
+
+.advanced-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px !important;
+}
+
+.advanced-results {
+  margin-top: 40px;
+}
+
+.advanced-results-head h2 {
+  margin: 0 0 18px;
+  font-size: 28px;
+  font-weight: 400;
+}
+
+@media (max-width: 760px) {
+  .advanced-top-search {
+    grid-template-columns: minmax(0, 1fr) 52px;
+  }
+
+  .advanced-hero h1 {
+    font-size: 32px;
+  }
+}  background: #ffffff;
   color: #111;
 }
 
