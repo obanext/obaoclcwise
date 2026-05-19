@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 
 const GENRES = [
-  ["", ""],
+  ["", "Kies een waarde"],
   ["DI", "Dieren"],
   ["DE", "Detective"],
   ["GR", "Griezelverhaal"],
@@ -10,14 +10,14 @@ const GENRES = [
 ];
 
 const FORMATS = [
-  ["", ""],
+  ["", "Kies een waarde"],
   ["BOE", "Boek"],
   ["DVD", "DVD"],
   ["STR", "Strip"],
 ];
 
 const LANGUAGES = [
-  ["", ""],
+  ["", "Kies een waarde"],
   ["DUT", "Nederlands"],
   ["ENG", "Engels"],
   ["GER", "Duits"],
@@ -28,6 +28,7 @@ const emptyForm = {
   title: "",
   author: "",
   subject: "",
+  publisher: "",
   series: "",
   isbn: "",
   year: "",
@@ -47,10 +48,50 @@ function asArray(value) {
   return Array.isArray(value) ? value : value ? [value] : [];
 }
 
+function buildQuery(form) {
+  const parts = [];
+
+  if (text(form.q)) {
+    parts.push(form.q.trim());
+  }
+
+  if (text(form.title)) {
+    parts.push(`title:"${form.title.trim()}"`);
+  }
+
+  if (text(form.author)) {
+    parts.push(`author:"${form.author.trim()}"`);
+  }
+
+  if (text(form.subject)) {
+    parts.push(`subject:"${form.subject.trim()}"`);
+  }
+
+  if (text(form.publisher)) {
+    parts.push(`publisher:"${form.publisher.trim()}"`);
+  }
+
+  if (text(form.series)) {
+    parts.push(`series:"${form.series.trim()}"`);
+  }
+
+  if (text(form.isbn)) {
+    parts.push(`isbn:"${form.isbn.trim()}"`);
+  }
+
+  if (text(form.year)) {
+    parts.push(`year:"${form.year.trim()}"`);
+  }
+
+  return parts.join(" ");
+}
+
 export default function AdvancedSearchPage() {
   const [form, setForm] = useState(emptyForm);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const queryPreview = useMemo(() => buildQuery(form), [form]);
 
   const results = asArray(data?.response?.items);
   const total = data?.response?.total || 0;
@@ -71,7 +112,9 @@ export default function AdvancedSearchPage() {
 
     Object.entries(form).forEach(([key, value]) => {
       if (typeof value === "boolean") {
-        if (value) params.set(key, "true");
+        if (value) {
+          params.set(key, "true");
+        }
         return;
       }
 
@@ -80,7 +123,10 @@ export default function AdvancedSearchPage() {
       }
     });
 
+    params.set("queryPreview", queryPreview);
+
     const response = await fetch(`/api/advanced-search?${params.toString()}`);
+
     const json = await response.json();
 
     setData(json);
@@ -97,170 +143,223 @@ export default function AdvancedSearchPage() {
         <img src="/header.JPG" alt="OBA" />
       </div>
 
-      <div className="container advanced-search-page">
-        <div className="advanced-hero">
-          <h1>Uitgebreid zoeken</h1>
+      <div className="container advanced-search-old-page">
+        <div className="advanced-old-topbar">
+          <div className="old-school-combined-search">
+            <select className="old-school-select">
+              <option>OBA</option>
+            </select>
+
+            <div className="old-school-search-input-wrap">
+              <input
+                className="old-school-search-input"
+                value={form.q}
+                onChange={(event) => setField("q", event.target.value)}
+                placeholder="Voer hier uw zoekterm(en) in"
+              />
+            </div>
+          </div>
+
+          <button className="advanced-old-find-button">VIND</button>
+
+          <span className="advanced-old-link">uitgebreid zoeken</span>
         </div>
 
-        <div className="advanced-tabs">
-          <button className="advanced-tab active" type="button">
-            Catalogus
-          </button>
+        <button className="advanced-old-back">Terug</button>
 
-          <button className="advanced-tab disabled" type="button" disabled>
-            Activiteiten
-          </button>
+        <form className="advanced-old-layout" onSubmit={submit}>
+          <aside className="advanced-old-sidebar">
+            <div className="advanced-old-sidebar-title">Zoek in:</div>
 
-          <button className="advanced-tab disabled" type="button" disabled>
-            Alles
-          </button>
+            <button type="button" className="advanced-old-nav disabled">
+              Activiteiten
+            </button>
 
-          <button className="advanced-tab disabled" type="button" disabled>
-            Uittreksels
-          </button>
-        </div>
+            <button type="button" className="advanced-old-nav disabled">
+              Alles
+            </button>
 
-        <form className="advanced-card" onSubmit={submit}>
-          <div className="advanced-top-search">
-            <div className="old-school-combined-search">
-              <div className="old-school-search-input-wrap">
-                <span className="old-school-search-icon">⌕</span>
+            <button type="button" className="advanced-old-nav active">
+              Catalogus
+            </button>
 
-                <input
-                  className="old-school-search-input"
-                  value={form.q}
-                  onChange={(event) => setField("q", event.target.value)}
-                  placeholder="Zoek in de catalogus"
-                />
+            <button type="button" className="advanced-old-nav disabled">
+              Uittreksels
+            </button>
+          </aside>
+
+          <section className="advanced-old-main">
+            <div className="advanced-old-query-row">
+              <div className="advanced-old-label">
+                Uw zoekopdracht
               </div>
+
+              <textarea
+                value={queryPreview}
+                readOnly
+                className="advanced-old-query-preview"
+              />
             </div>
 
-            <button type="submit" className="old-school-submit">
-              →
-            </button>
-          </div>
+            <div className="advanced-old-fields">
+              <label className="advanced-old-field">
+                <span>Titel</span>
 
-          <div className="advanced-filter-list">
-            <label>
-              <span className="advanced-filter-title">Titel</span>
+                <input
+                  value={form.title}
+                  onChange={(event) =>
+                    setField("title", event.target.value)
+                  }
+                />
 
-              <input
-                value={form.title}
-                onChange={(event) => setField("title", event.target.value)}
-              />
-            </label>
+                <small>De titel, of een gedeelte van de titel</small>
+              </label>
 
-            <label>
-              <span className="advanced-filter-title">Auteur</span>
+              <label className="advanced-old-field">
+                <span>Auteur</span>
 
-              <input
-                value={form.author}
-                onChange={(event) => setField("author", event.target.value)}
-              />
-            </label>
+                <input
+                  value={form.author}
+                  onChange={(event) =>
+                    setField("author", event.target.value)
+                  }
+                />
 
-            <label>
-              <span className="advanced-filter-title">Onderwerp</span>
+                <small>Auteur, acteur, regisseur, artiest</small>
+              </label>
 
-              <input
-                value={form.subject}
-                onChange={(event) => setField("subject", event.target.value)}
-              />
-            </label>
+              <label className="advanced-old-field">
+                <span>Formaat</span>
 
-            <label>
-              <span className="advanced-filter-title">Reeks</span>
+                <select
+                  value={form.mediumTypeCode}
+                  onChange={(event) =>
+                    setField("mediumTypeCode", event.target.value)
+                  }
+                >
+                  {FORMATS.map(([value, label]) => (
+                    <option key={value || "empty"} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              <input
-                value={form.series}
-                onChange={(event) => setField("series", event.target.value)}
-              />
-            </label>
+              <label className="advanced-old-field">
+                <span>Jaar</span>
 
-            <label>
-              <span className="advanced-filter-title">ISBN</span>
+                <input
+                  value={form.year}
+                  onChange={(event) =>
+                    setField(
+                      "year",
+                      event.target.value
+                        .replace(/[^\d]/g, "")
+                        .slice(0, 4)
+                    )
+                  }
+                />
 
-              <input
-                value={form.isbn}
-                onChange={(event) => setField("isbn", event.target.value)}
-              />
-            </label>
+                <small>Zoek in het formaat: JJJJ</small>
+              </label>
 
-            <label>
-              <span className="advanced-filter-title">Jaar</span>
+              <label className="advanced-old-field">
+                <span>Genre</span>
 
-              <input
-                value={form.year}
-                onChange={(event) =>
-                  setField(
-                    "year",
-                    event.target.value.replace(/[^\d]/g, "").slice(0, 4)
-                  )
-                }
-              />
-            </label>
+                <select
+                  value={form.genreCode}
+                  onChange={(event) =>
+                    setField("genreCode", event.target.value)
+                  }
+                >
+                  {GENRES.map(([value, label]) => (
+                    <option key={value || "empty"} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label>
-              <span className="advanced-filter-title">Genre</span>
+              <label className="advanced-old-field">
+                <span>Taal</span>
 
-              <select
-                value={form.genreCode}
-                onChange={(event) => setField("genreCode", event.target.value)}
-              >
-                {GENRES.map(([value, label]) => (
-                  <option key={value || "empty"} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <select
+                  value={form.languageCode}
+                  onChange={(event) =>
+                    setField("languageCode", event.target.value)
+                  }
+                >
+                  {LANGUAGES.map(([value, label]) => (
+                    <option key={value || "empty"} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label>
-              <span className="advanced-filter-title">Formaat</span>
+              <label className="advanced-old-field">
+                <span>Onderwerp</span>
 
-              <select
-                value={form.mediumTypeCode}
-                onChange={(event) =>
-                  setField("mediumTypeCode", event.target.value)
-                }
-              >
-                {FORMATS.map(([value, label]) => (
-                  <option key={value || "empty"} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <input
+                  value={form.subject}
+                  onChange={(event) =>
+                    setField("subject", event.target.value)
+                  }
+                />
+              </label>
 
-            <label>
-              <span className="advanced-filter-title">Taal</span>
+              <label className="advanced-old-field">
+                <span>Uitgever</span>
 
-              <select
-                value={form.languageCode}
-                onChange={(event) =>
-                  setField("languageCode", event.target.value)
-                }
-              >
-                {LANGUAGES.map(([value, label]) => (
-                  <option key={value || "empty"} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <input
+                  value={form.publisher}
+                  onChange={(event) =>
+                    setField("publisher", event.target.value)
+                  }
+                />
+              </label>
 
-            <label className="advanced-check">
-              <input
-                type="checkbox"
-                checked={form.available}
-                onChange={(event) =>
-                  setField("available", event.target.checked)
-                }
-              />
+              <label className="advanced-old-field">
+                <span>ISBN</span>
 
-              <span>Alleen beschikbare titels</span>
-            </label>
-          </div>
+                <input
+                  value={form.isbn}
+                  onChange={(event) =>
+                    setField("isbn", event.target.value)
+                  }
+                />
+              </label>
+
+              <label className="advanced-old-field">
+                <span>Reeks</span>
+
+                <input
+                  value={form.series}
+                  onChange={(event) =>
+                    setField("series", event.target.value)
+                  }
+                />
+              </label>
+
+              <label className="advanced-old-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.available}
+                  onChange={(event) =>
+                    setField("available", event.target.checked)
+                  }
+                />
+
+                <span>Alleen beschikbare titels</span>
+              </label>
+            </div>
+
+            <div className="advanced-old-actions">
+              <button type="submit" className="advanced-old-submit">
+                VIND
+              </button>
+            </div>
+          </section>
         </form>
 
         {loading ? (
