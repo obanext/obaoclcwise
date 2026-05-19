@@ -110,7 +110,11 @@ function yearFacet(value) {
   return `publicationYear:${year}-01-01T00:00:00Z`;
 }
 
-function determinePrimarySearch(form, queryPreview) {
+function normalizeIsbn(value) {
+  return text(value).replace(/[\s-]/g, "");
+}
+
+function determinePrimarySearch(form) {
   const free = text(form.q);
 
   if (free) {
@@ -118,35 +122,51 @@ function determinePrimarySearch(form, queryPreview) {
   }
 
   const scopedFields = [
-    { name: "title", value: form.title, searchScope: "title" },
-    { name: "author", value: form.author, searchScope: "author" },
-    { name: "subject", value: form.subject, searchScope: "subject" },
-    { name: "series", value: form.series, searchScope: "series" },
+    { value: form.title, searchScope: "title" },
+    { value: form.author, searchScope: "author" },
   ].filter((field) => text(field.value));
 
-  const otherTextFields = [
+  const directFacetFields = [
+    form.subject,
+    form.series,
+    form.year,
+    form.genreCode,
+    form.mediumTypeCode,
+    form.languageCode,
+    form.branchId,
+    form.audienceCode,
+  ].filter((value) => text(value));
+
+  const termFilterFields = [form.isbn].filter((value) => text(value));
+
+  const unsupportedTextFields = [
     form.placementCode,
     form.issn,
     form.publisher,
-    form.isbn,
     form.collection,
     form.content,
   ].filter((value) => text(value));
 
-  if (scopedFields.length === 1 && otherTextFields.length === 0) {
+  if (
+    scopedFields.length === 1 &&
+    directFacetFields.length === 0 &&
+    termFilterFields.length === 0 &&
+    unsupportedTextFields.length === 0
+  ) {
     return { q: text(scopedFields[0].value), searchScope: scopedFields[0].searchScope };
   }
 
-  if (text(queryPreview)) {
-    return { q: text(queryPreview), searchScope: "anything" };
+  if (unsupportedTextFields.length > 0 || scopedFields.length > 1) {
+    return { q: buildQuery(form), searchScope: "anything" };
   }
 
   return { q: "*.*", searchScope: "anything" };
 }
 
-function buildOclcSearchUrl(form, queryPreview) {
+function buildOclcSearchUrl(form) {
   const params = new URLSearchParams();
-  const primary = determinePrimarySearch(form, queryPreview);
+  const primary = determinePrimarySearch(form);
+
   const filters = [
     yearFacet(form.year),
     text(form.genreCode) ? `genreCode:${text(form.genreCode)}` : "",
@@ -154,6 +174,12 @@ function buildOclcSearchUrl(form, queryPreview) {
     text(form.languageCode) ? `languageCode:${text(form.languageCode)}` : "",
     text(form.branchId) ? `branchId:${text(form.branchId)}` : "",
     text(form.audienceCode) ? `audienceCode:${text(form.audienceCode)}` : "",
+    text(form.subject) ? `subject:${text(form.subject)}` : "",
+    text(form.series) ? `series:${text(form.series)}` : "",
+  ].filter(Boolean);
+
+  const termFilters = [
+    normalizeIsbn(form.isbn) ? `isbn:${normalizeIsbn(form.isbn)}` : "",
   ].filter(Boolean);
 
   params.set("q", primary.q);
@@ -163,6 +189,7 @@ function buildOclcSearchUrl(form, queryPreview) {
   params.set("perspectiveId", "3682");
 
   filters.forEach((filter) => params.append("facetFilter", filter));
+  termFilters.forEach((filter) => params.append("termFilter", filter));
 
   if (form.available) {
     params.set("filterAvailableTitles", "true");
@@ -177,12 +204,15 @@ export default function AdvancedSearchPage() {
   const queryPreview = useMemo(() => buildQuery(form), [form]);
 
   function setField(name, value) {
-    setForm((current) => ({ ...current, [name]: value }));
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
   }
 
   function submit(event) {
     event.preventDefault();
-    router.push(buildOclcSearchUrl(form, queryPreview));
+    router.push(buildOclcSearchUrl(form));
   }
 
   function reset() {
@@ -196,79 +226,198 @@ export default function AdvancedSearchPage() {
       </div>
 
       <div className="container advanced-search-page">
-        <section className="advanced-search-top">
-          <form className="advanced-search-formbar" onSubmit={submit}>
-            <select className="advanced-source-select" value="OBA" disabled>
-              <option>OBA</option>
-            </select>
-
-            <div className="advanced-free-input-wrap">
-              <input
-                className="advanced-free-input"
-                value={form.q}
-                onChange={(event) => setField("q", event.target.value)}
-                placeholder="Voer hier uw zoekterm(en) in"
-              />
-            </div>
-
-            <button type="submit" className="advanced-top-submit" aria-label="Zoeken">
-              ⌕
-            </button>
-          </form>
-
-          <div className="advanced-search-link-row">
-            <button type="button" onClick={reset}>Wis</button>
-            <Link href="/old-school-search">Terug</Link>
-          </div>
+        <section className="preselect-intro">
+          <h1>Uitgebreid zoeken</h1>
         </section>
 
-        <div className="advanced-tabs">
-          <button type="button" className="advanced-tab disabled" disabled>Activiteiten</button>
-          <button type="button" className="advanced-tab disabled" disabled>Alles</button>
-          <button type="button" className="advanced-tab active">Catalogus</button>
-          <button type="button" className="advanced-tab disabled" disabled>Uittreksels</button>
-        </div>
+        <form className="old-school-form" onSubmit={submit}>
+          <div className="old-school-combined-search">
+            <select
+              className="old-school-select"
+              value="catalogus"
+              onChange={() => {}}
+              aria-label="Zoekcollectie"
+            >
+              <option value="catalogus">Catalogus</option>
+            </select>
 
-        <form className="advanced-panel" onSubmit={submit}>
-          <div className="advanced-query-block">
-            <label htmlFor="advanced-query-preview">Uw zoekopdracht</label>
-            <textarea
-              id="advanced-query-preview"
-              className="advanced-query-preview"
-              value={queryPreview}
-              readOnly
+            <div className="old-school-search-input-wrap">
+              <span className="old-school-search-icon">⌕</span>
+              <input
+                className="old-school-search-input"
+                value={form.q}
+                onChange={(event) => setField("q", event.target.value)}
+                placeholder="Waar ben je naar op zoek?"
+              />
+            </div>
+          </div>
+
+          <label className="old-school-available-toggle">
+            <input
+              type="checkbox"
+              checked={form.available}
+              onChange={(event) => setField("available", event.target.checked)}
             />
-          </div>
+            <span>Aanwezig</span>
+          </label>
 
-          <div className="advanced-field-list">
-            <div className="advanced-field"><label>Titel</label><input value={form.title} onChange={(event) => setField("title", event.target.value)} /></div>
-            <div className="advanced-field"><label>Auteur</label><input value={form.author} onChange={(event) => setField("author", event.target.value)} /></div>
-            <div className="advanced-field"><label>Formaat</label><select value={form.mediumTypeCode} onChange={(event) => setField("mediumTypeCode", event.target.value)}>{FORMATS.map(([value, label]) => <option key={value || "empty"} value={value}>{label}</option>)}</select></div>
-            <div className="advanced-field"><label>Bibliotheek</label><select value={form.branchId} onChange={(event) => setField("branchId", event.target.value)}>{BRANCHES.map(([value, label]) => <option key={value || "empty"} value={value}>{label}</option>)}</select></div>
-            <div className="advanced-field"><label>Plaatsingscode</label><input value={form.placementCode} onChange={(event) => setField("placementCode", event.target.value)} /></div>
-            <div className="advanced-field"><label>Jaar</label><input value={form.year} onChange={(event) => setField("year", event.target.value.replace(/[^\d]/g, "").slice(0, 4))} /></div>
-            <div className="advanced-field"><label>Genre</label><select value={form.genreCode} onChange={(event) => setField("genreCode", event.target.value)}>{GENRES.map(([value, label]) => <option key={value || "empty"} value={value}>{label}</option>)}</select></div>
-            <div className="advanced-field"><label>Taal</label><select value={form.languageCode} onChange={(event) => setField("languageCode", event.target.value)}>{LANGUAGES.map(([value, label]) => <option key={value || "empty"} value={value}>{label}</option>)}</select></div>
-            <div className="advanced-field"><label>Onderwerp</label><input value={form.subject} onChange={(event) => setField("subject", event.target.value)} /></div>
-            <div className="advanced-field"><label>ISSN</label><input value={form.issn} onChange={(event) => setField("issn", event.target.value)} /></div>
-            <div className="advanced-field"><label>Uitgever</label><input value={form.publisher} onChange={(event) => setField("publisher", event.target.value)} /></div>
-            <div className="advanced-field"><label>ISBN</label><input value={form.isbn} onChange={(event) => setField("isbn", event.target.value)} /></div>
-            <div className="advanced-field"><label>Reeks</label><input value={form.series} onChange={(event) => setField("series", event.target.value)} /></div>
-            <div className="advanced-field"><label>Collectie</label><select value={form.collection} onChange={(event) => setField("collection", event.target.value)}>{COLLECTIONS.map(([value, label]) => <option key={value || "empty"} value={value}>{label}</option>)}</select></div>
-            <div className="advanced-field"><label>Jeugd</label><select value={form.audienceCode} onChange={(event) => setField("audienceCode", event.target.value)}>{YOUTH.map(([value, label]) => <option key={value || "empty"} value={value}>{label}</option>)}</select></div>
-            <div className="advanced-field"><label>Inhoud</label><input value={form.content} onChange={(event) => setField("content", event.target.value)} /></div>
-
-            <label className="advanced-check">
-              <input type="checkbox" checked={form.available} onChange={(event) => setField("available", event.target.checked)} />
-              <span>Alleen beschikbare titels</span>
-            </label>
-          </div>
-
-          <div className="advanced-actions">
-            <button type="submit" className="advanced-submit">VIND</button>
-            <button type="button" className="advanced-clear" onClick={reset}>WISSEN</button>
-          </div>
+          <button className="old-school-submit" type="submit" aria-label="Zoeken">
+            →
+          </button>
         </form>
+
+        <section className="advanced-search-card">
+          <label className="advanced-field advanced-query-field">
+            <span>Uw zoekopdracht</span>
+            <textarea className="advanced-query-preview" value={queryPreview} readOnly />
+          </label>
+
+          <form className="advanced-filter-list" onSubmit={submit}>
+            <label className="advanced-field">
+              <span>Titel</span>
+              <input value={form.title} onChange={(event) => setField("title", event.target.value)} />
+            </label>
+
+            <label className="advanced-field">
+              <span>Auteur</span>
+              <input value={form.author} onChange={(event) => setField("author", event.target.value)} />
+            </label>
+
+            <label className="advanced-field">
+              <span>Formaat</span>
+              <select
+                value={form.mediumTypeCode}
+                onChange={(event) => setField("mediumTypeCode", event.target.value)}
+              >
+                {FORMATS.map(([value, label]) => (
+                  <option key={value || "empty"} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="advanced-field">
+              <span>Bibliotheek</span>
+              <select value={form.branchId} onChange={(event) => setField("branchId", event.target.value)}>
+                {BRANCHES.map(([value, label]) => (
+                  <option key={value || "empty"} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="advanced-field">
+              <span>Plaatsingscode</span>
+              <input
+                value={form.placementCode}
+                onChange={(event) => setField("placementCode", event.target.value)}
+              />
+            </label>
+
+            <label className="advanced-field">
+              <span>Jaar</span>
+              <input
+                value={form.year}
+                onChange={(event) =>
+                  setField("year", event.target.value.replace(/[^\d]/g, "").slice(0, 4))
+                }
+              />
+            </label>
+
+            <label className="advanced-field">
+              <span>Genre</span>
+              <select value={form.genreCode} onChange={(event) => setField("genreCode", event.target.value)}>
+                {GENRES.map(([value, label]) => (
+                  <option key={value || "empty"} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="advanced-field">
+              <span>Taal</span>
+              <select value={form.languageCode} onChange={(event) => setField("languageCode", event.target.value)}>
+                {LANGUAGES.map(([value, label]) => (
+                  <option key={value || "empty"} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="advanced-field">
+              <span>Onderwerp</span>
+              <input value={form.subject} onChange={(event) => setField("subject", event.target.value)} />
+            </label>
+
+            <label className="advanced-field">
+              <span>ISSN</span>
+              <input value={form.issn} onChange={(event) => setField("issn", event.target.value)} />
+            </label>
+
+            <label className="advanced-field">
+              <span>Uitgever</span>
+              <input value={form.publisher} onChange={(event) => setField("publisher", event.target.value)} />
+            </label>
+
+            <label className="advanced-field">
+              <span>ISBN</span>
+              <input value={form.isbn} onChange={(event) => setField("isbn", event.target.value)} />
+            </label>
+
+            <label className="advanced-field">
+              <span>Reeks</span>
+              <input value={form.series} onChange={(event) => setField("series", event.target.value)} />
+            </label>
+
+            <label className="advanced-field">
+              <span>Collectie</span>
+              <select value={form.collection} onChange={(event) => setField("collection", event.target.value)}>
+                {COLLECTIONS.map(([value, label]) => (
+                  <option key={value || "empty"} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="advanced-field">
+              <span>Jeugd</span>
+              <select value={form.audienceCode} onChange={(event) => setField("audienceCode", event.target.value)}>
+                {YOUTH.map(([value, label]) => (
+                  <option key={value || "empty"} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="advanced-field">
+              <span>Inhoud</span>
+              <input value={form.content} onChange={(event) => setField("content", event.target.value)} />
+            </label>
+
+            <div className="advanced-actions">
+              <button type="button" className="advanced-clear" onClick={reset}>
+                Wis
+              </button>
+              <button type="submit" className="advanced-submit">
+                Zoek
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <p className="old-school-debug-line">
+          Resultaten openen in <code>/oclc-search</code>.
+        </p>
+
+        <p className="preselect-contact">
+          <Link href="/">Terug naar overzicht</Link>
+        </p>
       </div>
     </main>
   );
