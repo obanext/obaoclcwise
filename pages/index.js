@@ -43,6 +43,13 @@ const searchOptions = [
       "OCLC Wise data wordt geladen in een mock-up oba.nl zoekpagina met de filters en facetten gedefinieerd door OBA.",
     status: "Nog te implementeren",
   },
+  {
+    label: "Zoeken met natuurlijke taal",
+    description:
+      "Nexi handelt de natuurlijke-taal zoekopdracht af; de OBA mock-up toont zoekveld en resultaten.",
+    href: "/nexi-search",
+    status: "Beschikbaar",
+  },
 ];
 
 const oldSchoolOptions = [
