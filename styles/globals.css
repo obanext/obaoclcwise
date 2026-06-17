@@ -1434,3 +1434,28 @@ textarea {
     padding-left: 0;
   }
 }
+
+.filter-select-row {
+  display: block;
+  padding: 0 13px 12px;
+}
+
+.filter-select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fff;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.filter-clear-button {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #111;
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}

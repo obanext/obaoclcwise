@@ -12,35 +12,67 @@ const text = (value) => {
   return String(value).trim();
 };
 
+const DOMAIN_LABELS = {
+  collection: "collectie",
+  agenda: "agenda",
+};
+
+function normalizeDomain(value) {
+  return value === "agenda" ? "agenda" : "collection";
+}
+
+function domainLabel(domain) {
+  return DOMAIN_LABELS[normalizeDomain(domain)] || normalizeDomain(domain);
+}
+
 function coverUrl(result = {}) {
   const ppn = encodeURIComponent(text(result.ppn));
   const isbn = encodeURIComponent(text(result.isbn));
 
   if (text(result.cover)) return text(result.cover);
-  if (!ppn && !isbn) return "";
+  if (text(result.coverUrl)) return text(result.coverUrl);
+  if (!ppn && !isbn) return "/placeholder.png";
 
   return `https://cover.biblion.nl/coverlist.dll/?doctype=morebutton&bibliotheek=oba&style=0&ppn=${ppn}&isbn=${isbn}&lid=&aut=&ti=&size=150`;
 }
 
 function resultTitle(result = {}) {
-  return text(result.short_title || result.title || result.name || result.titel);
+  return text(result.short_title || result.title || result.name || result.titel || result.naam);
 }
 
 function resultMeta(result = {}) {
   return [
     text(result.author || result.auteur),
-    text(result.year || result.jaar || result.date),
-    text(result.location),
+    text(result.year || result.jaar || result.date || result.datum),
+    text(result.location || result.locatie || result.gebouw),
     text(result.ppn ? `PPN ${result.ppn}` : ""),
   ].filter(Boolean).join(" | ");
+}
+
+function cleanFilters(filters = {}) {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, value]) => text(value))
+  );
+}
+
+function hasActiveFilters(filters = {}) {
+  return Object.keys(cleanFilters(filters)).length > 0;
+}
+
+function filterStateFromGroups(groups = []) {
+  return Object.fromEntries(asArray(groups).map((group) => [group.key, ""]));
 }
 
 export default function NexiSearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [threadId, setThreadId] = useState("");
+  const [domain, setDomain] = useState("collection");
+  const [filters, setFilters] = useState({ groups: [] });
+  const [selectedFilters, setSelectedFilters] = useState({});
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [filterLoading, setFilterLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -48,36 +80,70 @@ export default function NexiSearchPage() {
 
     const q = typeof router.query.q === "string" ? router.query.q : "";
     const tid = typeof router.query.thread_id === "string" ? router.query.thread_id : "";
+    const nextDomain = normalizeDomain(router.query.domain);
 
     setQuery(q);
     setThreadId(tid);
+    setDomain(nextDomain);
 
-    if (q) runSearch(q, tid, false);
+    loadFilters(nextDomain);
+    if (q) runSearch({ nextQuery: q, nextThreadId: tid, nextDomain, nextFilters: {}, updateUrl: false });
   }, [router.isReady]);
 
-  function buildUrl(nextQuery, nextThreadId) {
-    const params = new URLSearchParams();
-    if (text(nextQuery)) params.set("q", text(nextQuery));
-    if (text(nextThreadId)) params.set("thread_id", text(nextThreadId));
-    const qs = params.toString();
-    return qs ? `/nexi-search?${qs}` : "/nexi-search";
+  function loadFilters(nextDomain) {
+    setFilterLoading(true);
+    fetch(`/api/nexi-filters?domain=${encodeURIComponent(nextDomain)}`)
+      .then((response) => response.json())
+      .then((json) => {
+        const nextFilters = json || { domain: nextDomain, groups: [] };
+        setFilters(nextFilters);
+        setSelectedFilters(filterStateFromGroups(nextFilters.groups));
+      })
+      .catch(() => {
+        setFilters({ domain: nextDomain, groups: [] });
+        setSelectedFilters({});
+      })
+      .finally(() => setFilterLoading(false));
   }
 
-  function buildApiUrl(nextQuery, nextThreadId) {
+  function buildUrl(nextQuery, nextThreadId, nextDomain) {
+    const params = new URLSearchParams();
+    params.set("domain", normalizeDomain(nextDomain));
+    if (text(nextQuery)) params.set("q", text(nextQuery));
+    if (text(nextThreadId)) params.set("thread_id", text(nextThreadId));
+    return `/nexi-search?${params.toString()}`;
+  }
+
+  function buildApiUrl({ nextQuery, nextThreadId, nextDomain, nextFilters }) {
     const params = new URLSearchParams();
     if (text(nextQuery)) params.set("q", text(nextQuery));
     if (text(nextThreadId)) params.set("thread_id", text(nextThreadId));
+    params.set("domain", normalizeDomain(nextDomain));
+    params.set("filter_domain", normalizeDomain(nextDomain));
+
+    const activeFilters = cleanFilters(nextFilters);
+    if (Object.keys(activeFilters).length) {
+      params.set("filters", JSON.stringify(activeFilters));
+    }
+
     return `/api/nexi-search?${params.toString()}`;
   }
 
-  function runSearch(nextQuery = query, nextThreadId = threadId, updateUrl = true) {
+  function runSearch({
+    nextQuery = query,
+    nextThreadId = threadId,
+    nextDomain = domain,
+    nextFilters = selectedFilters,
+    updateUrl = true,
+  } = {}) {
     const q = text(nextQuery);
-    if (!q) return;
+    const activeFilters = cleanFilters(nextFilters);
+    if (!q && !Object.keys(activeFilters).length) return;
 
     setLoading(true);
     setError("");
 
-    fetch(buildApiUrl(q, nextThreadId))
+    fetch(buildApiUrl({ nextQuery: q, nextThreadId, nextDomain, nextFilters: activeFilters }))
       .then(async (response) => {
         const json = await response.json().catch(() => null);
         if (!response.ok) throw new Error(json?.error || `Request failed with status ${response.status}`);
@@ -86,7 +152,7 @@ export default function NexiSearchPage() {
       .then((json) => {
         setData(json);
         setThreadId(text(json?.thread_id));
-        if (updateUrl) router.push(buildUrl(q, json?.thread_id), undefined, { shallow: true });
+        if (updateUrl) router.push(buildUrl(q || data?.query || query, json?.thread_id, nextDomain), undefined, { shallow: true });
       })
       .catch((err) => setError(err.message || "Onbekende fout"))
       .finally(() => setLoading(false));
@@ -94,20 +160,64 @@ export default function NexiSearchPage() {
 
   function submit(event) {
     event.preventDefault();
-    runSearch(query, threadId, true);
+    runSearch({ nextQuery: query, nextThreadId: threadId, nextDomain: domain, nextFilters: selectedFilters, updateUrl: true });
   }
 
   function clearSearch() {
     setQuery("");
     setData(null);
     setError("");
-    router.push("/nexi-search", undefined, { shallow: true });
+    setThreadId("");
+    router.push(buildUrl("", "", domain), undefined, { shallow: true });
   }
 
-  const response = data?.response || null;
-  const responseType = text(response?.type);
+  function changeDomain(event) {
+    const nextDomain = normalizeDomain(event.target.value);
+    setDomain(nextDomain);
+    setData(null);
+    setThreadId("");
+    setError("");
+    loadFilters(nextDomain);
+    router.push(buildUrl("", "", nextDomain), undefined, { shallow: true });
+  }
+
+  function toggleFilter(groupKey, value) {
+    const nextSelected = {
+      ...selectedFilters,
+      [groupKey]: selectedFilters[groupKey] === value ? "" : value,
+    };
+    setSelectedFilters(nextSelected);
+
+    if (data || text(query)) {
+      runSearch({
+        nextQuery: text(data?.query) || query,
+        nextThreadId: threadId,
+        nextDomain: domain,
+        nextFilters: nextSelected,
+        updateUrl: true,
+      });
+    }
+  }
+
+  function clearFilters() {
+    const cleared = filterStateFromGroups(filters.groups);
+    setSelectedFilters(cleared);
+
+    if (data || text(query)) {
+      runSearch({
+        nextQuery: text(data?.query) || query,
+        nextThreadId: threadId,
+        nextDomain: domain,
+        nextFilters: cleared,
+        updateUrl: true,
+      });
+    }
+  }
+
   const results = asArray(data?.results);
-  const hasQuery = Boolean(text(query));
+  const submittedQuery = text(data?.query);
+  const hasSubmittedQuery = Boolean(submittedQuery);
+  const activeFilterCount = Object.keys(cleanFilters(selectedFilters)).length;
 
   return (
     <div className="page">
@@ -152,35 +262,61 @@ export default function NexiSearchPage() {
         <section className="oba-search-layout">
           <aside className="oba-filter-panel">
             <div className="filter-card filter-card-open">
-              <div className="filter-card-title">Afhandeling</div>
+              <div className="filter-card-title">Bron</div>
               <div className="filter-options">
-                <div className="filter-empty">Nexi</div>
+                <label className="filter-select-row">
+                  <select value={domain} onChange={changeDomain} className="filter-select">
+                    <option value="collection">Collectie</option>
+                    <option value="agenda">Agenda</option>
+                  </select>
+                </label>
               </div>
             </div>
 
-            {responseType ? (
-              <div className="filter-card filter-card-open">
-                <div className="filter-card-title">Type</div>
+            {filterLoading ? <div className="filter-empty">Filters laden...</div> : null}
+
+            {asArray(filters.groups).map((group) => (
+              <div className="filter-card filter-card-open" key={group.key}>
+                <div className="filter-card-title">{group.label}</div>
                 <div className="filter-options">
-                  <div className="filter-empty">{responseType}</div>
+                  {asArray(group.options).map((option) => {
+                    const active = selectedFilters[group.key] === option.value;
+                    return (
+                      <button
+                        type="button"
+                        className={active ? "filter-radio active" : "filter-radio"}
+                        key={option.value}
+                        onClick={() => toggleFilter(group.key, option.value)}
+                      >
+                        <span className="radio-dot" />
+                        <span className="filter-label">{option.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            ))}
+
+            {activeFilterCount ? (
+              <button type="button" className="filter-clear-button" onClick={clearFilters}>
+                Wis filters
+              </button>
             ) : null}
           </aside>
 
           <main className="oba-results-panel">
             <div className="oba-results-heading">
               <div>
-                <h1>{hasQuery ? `'${text(data?.query) || query}'` : "Zoeken met natuurlijke taal"}</h1>
+                <h1>{hasSubmittedQuery ? `${submittedQuery} in ${domainLabel(domain)}` : "Zoeken met natuurlijke taal"}</h1>
                 <div className="oba-result-count">
-                  {hasQuery ? `${results.length.toLocaleString("nl-NL")} resultaten via Nexi` : "Typ een natuurlijke-taal zoekvraag."}
+                  {hasSubmittedQuery ? `${results.length.toLocaleString("nl-NL")} resultaten` : "Typ een natuurlijke-taal zoekvraag."}
                 </div>
               </div>
             </div>
 
-            {response?.message ? <div className="info-card">{response.message}</div> : null}
+            {data?.response?.message ? <div className="info-card">{data.response.message}</div> : null}
 
-            {hasQuery ? (
+            {hasSubmittedQuery || data ? (
               <section className="oba-result-list">
                 {results.length ? (
                   results.map((result, index) => {
@@ -188,15 +324,18 @@ export default function NexiSearchPage() {
                     const image = coverUrl(result);
                     const link = text(result.link || result.url);
                     const meta = resultMeta(result);
-                    const summary = text(result.summary || result.description || result.omschrijving);
+                    const summary = text(result.summary || result.description || result.omschrijving || result.beschrijving);
 
                     return (
                       <article className="oba-result-item" key={`${result.ppn || title || "result"}-${index}`}>
-                        {image ? (
-                          <img src={image} alt={title || "Cover"} className="oba-result-cover" />
-                        ) : (
-                          <div className="oba-result-cover empty-cover">Geen cover</div>
-                        )}
+                        <img
+                          src={image || "/placeholder.png"}
+                          alt={title || "Cover"}
+                          className="oba-result-cover"
+                          onError={(event) => {
+                            event.currentTarget.src = "/placeholder.png";
+                          }}
+                        />
 
                         <div className="oba-result-body">
                           {link ? (

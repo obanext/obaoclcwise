@@ -6,6 +6,38 @@ const text = (value) => {
   return String(value).trim();
 };
 
+const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+
+function parseJsonParam(value) {
+  const raw = text(value);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeFirst(value) {
+  const first = asArray(value).find((item) => text(item));
+  return text(first);
+}
+
+function normalizeResult(item = {}) {
+  return {
+    ...item,
+    ppn: normalizeFirst(item.ppn),
+    isbn: normalizeFirst(item.isbn),
+    short_title: text(item.short_title || item.title || item.titel || item.name),
+    summary: text(item.summary || item.description || item.omschrijving || item.beschrijving),
+  };
+}
+
+function normalizeResults(results) {
+  return asArray(results).map(normalizeResult);
+}
+
 async function postJson(url, body) {
   const response = await fetch(url, {
     method: "POST",
@@ -30,12 +62,22 @@ async function postJson(url, body) {
   };
 }
 
+function responseFromBody(body, fallbackThreadId) {
+  const response = body?.response || body || {};
+  const threadId = text(body?.thread_id || response?.thread_id || fallbackThreadId);
+  const results = normalizeResults(response?.results);
+  return { response: { ...response, results }, threadId, results };
+}
+
 export default async function handler(req, res) {
   const query = text(req.query.q);
   const incomingThreadId = text(req.query.thread_id);
+  const filterDomain = text(req.query.filter_domain || req.query.domain);
+  const filterValues = parseJsonParam(req.query.filters);
+  const hasFilters = Object.values(filterValues).some((value) => text(value));
   const nexiBaseUrl = text(process.env.NEXI_BASE_URL || DEFAULT_NEXI_BASE_URL).replace(/\/$/, "");
 
-  if (!query) {
+  if (!query && !hasFilters) {
     return res.status(200).json({
       query,
       thread_id: incomingThreadId || "",
@@ -66,35 +108,64 @@ export default async function handler(req, res) {
     threadId = text(startCall.body?.thread_id);
   }
 
-  const sendCall = await postJson(`${nexiBaseUrl}/send_message`, {
-    thread_id: threadId,
-    user_input: query,
-  });
-  calls.push(sendCall);
+  let finalBody = null;
 
-  if (!sendCall.ok) {
-    return res.status(502).json({
-      error: "Nexi send_message mislukt",
-      query,
+  if (query) {
+    const sendCall = await postJson(`${nexiBaseUrl}/send_message`, {
       thread_id: threadId,
-      response: null,
-      results: [],
-      debug: { calls },
+      user_input: query,
     });
+    calls.push(sendCall);
+
+    if (!sendCall.ok) {
+      return res.status(502).json({
+        error: "Nexi send_message mislukt",
+        query,
+        thread_id: threadId,
+        response: null,
+        results: [],
+        debug: { calls },
+      });
+    }
+
+    finalBody = sendCall.body || {};
+    threadId = responseFromBody(finalBody, threadId).threadId || threadId;
   }
 
-  const body = sendCall.body || {};
-  const nexiResponse = body.response || body;
-  const results = Array.isArray(nexiResponse?.results) ? nexiResponse.results : [];
+  if (hasFilters && filterDomain) {
+    const applyCall = await postJson(`${nexiBaseUrl}/apply_filters`, {
+      thread_id: threadId,
+      filter_domain: filterDomain,
+      filter_values_json: filterValues,
+      filter_values: "",
+    });
+    calls.push(applyCall);
+
+    if (!applyCall.ok) {
+      return res.status(502).json({
+        error: "Nexi apply_filters mislukt",
+        query,
+        thread_id: threadId,
+        response: null,
+        results: [],
+        debug: { calls },
+      });
+    }
+
+    finalBody = applyCall.body || {};
+    threadId = responseFromBody(finalBody, threadId).threadId || threadId;
+  }
+
+  const normalized = responseFromBody(finalBody || {}, threadId);
 
   return res.status(200).json({
     query,
-    thread_id: text(body.thread_id || nexiResponse.thread_id || threadId),
-    response: nexiResponse,
-    results,
+    thread_id: normalized.threadId,
+    response: normalized.response,
+    results: normalized.results,
     debug: {
       calls,
-      nexiDebug: body.debug || null,
+      nexiDebug: finalBody?.debug || null,
     },
   });
 }
