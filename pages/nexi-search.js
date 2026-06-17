@@ -12,17 +12,14 @@ const text = (value) => {
   return String(value).trim();
 };
 
-const DOMAIN_LABELS = {
+const SOURCE_LABELS = {
   collection: "collectie",
   agenda: "agenda",
 };
 
-function normalizeDomain(value) {
-  return value === "agenda" ? "agenda" : "collection";
-}
-
-function domainLabel(domain) {
-  return DOMAIN_LABELS[normalizeDomain(domain)] || normalizeDomain(domain);
+function sourceLabel(source) {
+  const key = text(source);
+  return SOURCE_LABELS[key] || key;
 }
 
 function coverUrl(result = {}) {
@@ -55,19 +52,21 @@ function cleanFilters(filters = {}) {
   );
 }
 
-function hasActiveFilters(filters = {}) {
-  return Object.keys(cleanFilters(filters)).length > 0;
-}
-
 function filterStateFromGroups(groups = []) {
   return Object.fromEntries(asArray(groups).map((group) => [group.key, ""]));
+}
+
+function filterSourceFromResponse(response = {}) {
+  const type = text(response?.type);
+  if (type === "collection" || type === "agenda") return type;
+  return "";
 }
 
 export default function NexiSearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [threadId, setThreadId] = useState("");
-  const [domain, setDomain] = useState("collection");
+  const [resolvedSource, setResolvedSource] = useState("");
   const [filters, setFilters] = useState({ groups: [] });
   const [selectedFilters, setSelectedFilters] = useState({});
   const [data, setData] = useState(null);
@@ -80,49 +79,48 @@ export default function NexiSearchPage() {
 
     const q = typeof router.query.q === "string" ? router.query.q : "";
     const tid = typeof router.query.thread_id === "string" ? router.query.thread_id : "";
-    const nextDomain = normalizeDomain(router.query.domain);
 
     setQuery(q);
     setThreadId(tid);
-    setDomain(nextDomain);
 
-    loadFilters(nextDomain);
-    if (q) runSearch({ nextQuery: q, nextThreadId: tid, nextDomain, nextFilters: {}, updateUrl: false });
+    if (q) runSearch({ nextQuery: q, nextThreadId: tid, nextFilters: {}, updateUrl: false });
   }, [router.isReady]);
 
-  function loadFilters(nextDomain) {
+  function loadFilters(source) {
+    const nextSource = text(source);
+    if (!nextSource) return;
+
     setFilterLoading(true);
-    fetch(`/api/nexi-filters?domain=${encodeURIComponent(nextDomain)}`)
+    fetch(`/api/nexi-filters?domain=${encodeURIComponent(nextSource)}`)
       .then((response) => response.json())
       .then((json) => {
-        const nextFilters = json || { domain: nextDomain, groups: [] };
+        const nextFilters = json || { domain: nextSource, groups: [] };
         setFilters(nextFilters);
         setSelectedFilters(filterStateFromGroups(nextFilters.groups));
       })
       .catch(() => {
-        setFilters({ domain: nextDomain, groups: [] });
+        setFilters({ domain: nextSource, groups: [] });
         setSelectedFilters({});
       })
       .finally(() => setFilterLoading(false));
   }
 
-  function buildUrl(nextQuery, nextThreadId, nextDomain) {
+  function buildUrl(nextQuery, nextThreadId) {
     const params = new URLSearchParams();
-    params.set("domain", normalizeDomain(nextDomain));
     if (text(nextQuery)) params.set("q", text(nextQuery));
     if (text(nextThreadId)) params.set("thread_id", text(nextThreadId));
-    return `/nexi-search?${params.toString()}`;
+    const queryString = params.toString();
+    return queryString ? `/nexi-search?${queryString}` : "/nexi-search";
   }
 
-  function buildApiUrl({ nextQuery, nextThreadId, nextDomain, nextFilters }) {
+  function buildApiUrl({ nextQuery, nextThreadId, nextSource, nextFilters }) {
     const params = new URLSearchParams();
     if (text(nextQuery)) params.set("q", text(nextQuery));
     if (text(nextThreadId)) params.set("thread_id", text(nextThreadId));
-    params.set("domain", normalizeDomain(nextDomain));
-    params.set("filter_domain", normalizeDomain(nextDomain));
 
     const activeFilters = cleanFilters(nextFilters);
-    if (Object.keys(activeFilters).length) {
+    if (Object.keys(activeFilters).length && text(nextSource)) {
+      params.set("filter_domain", text(nextSource));
       params.set("filters", JSON.stringify(activeFilters));
     }
 
@@ -132,7 +130,7 @@ export default function NexiSearchPage() {
   function runSearch({
     nextQuery = query,
     nextThreadId = threadId,
-    nextDomain = domain,
+    nextSource = resolvedSource,
     nextFilters = selectedFilters,
     updateUrl = true,
   } = {}) {
@@ -143,16 +141,25 @@ export default function NexiSearchPage() {
     setLoading(true);
     setError("");
 
-    fetch(buildApiUrl({ nextQuery: q, nextThreadId, nextDomain, nextFilters: activeFilters }))
+    fetch(buildApiUrl({ nextQuery: q, nextThreadId, nextSource, nextFilters: activeFilters }))
       .then(async (response) => {
         const json = await response.json().catch(() => null);
         if (!response.ok) throw new Error(json?.error || `Request failed with status ${response.status}`);
         return json;
       })
       .then((json) => {
+        const nextThreadIdValue = text(json?.thread_id);
+        const nextSourceValue = filterSourceFromResponse(json?.response) || text(nextSource);
+
         setData(json);
-        setThreadId(text(json?.thread_id));
-        if (updateUrl) router.push(buildUrl(q || data?.query || query, json?.thread_id, nextDomain), undefined, { shallow: true });
+        setThreadId(nextThreadIdValue);
+
+        if (nextSourceValue && nextSourceValue !== resolvedSource) {
+          setResolvedSource(nextSourceValue);
+          loadFilters(nextSourceValue);
+        }
+
+        if (updateUrl) router.push(buildUrl(q || data?.query || query, nextThreadIdValue), undefined, { shallow: true });
       })
       .catch((err) => setError(err.message || "Onbekende fout"))
       .finally(() => setLoading(false));
@@ -160,7 +167,10 @@ export default function NexiSearchPage() {
 
   function submit(event) {
     event.preventDefault();
-    runSearch({ nextQuery: query, nextThreadId: threadId, nextDomain: domain, nextFilters: selectedFilters, updateUrl: true });
+    setResolvedSource("");
+    setFilters({ groups: [] });
+    setSelectedFilters({});
+    runSearch({ nextQuery: query, nextThreadId: threadId, nextSource: "", nextFilters: {}, updateUrl: true });
   }
 
   function clearSearch() {
@@ -168,46 +178,39 @@ export default function NexiSearchPage() {
     setData(null);
     setError("");
     setThreadId("");
-    router.push(buildUrl("", "", domain), undefined, { shallow: true });
-  }
-
-  function changeDomain(event) {
-    const nextDomain = normalizeDomain(event.target.value);
-    setDomain(nextDomain);
-    setData(null);
-    setThreadId("");
-    setError("");
-    loadFilters(nextDomain);
-    router.push(buildUrl("", "", nextDomain), undefined, { shallow: true });
+    setResolvedSource("");
+    setFilters({ groups: [] });
+    setSelectedFilters({});
+    router.push("/nexi-search", undefined, { shallow: true });
   }
 
   function toggleFilter(groupKey, value) {
+    if (!resolvedSource) return;
+
     const nextSelected = {
       ...selectedFilters,
       [groupKey]: selectedFilters[groupKey] === value ? "" : value,
     };
     setSelectedFilters(nextSelected);
 
-    if (data || text(query)) {
-      runSearch({
-        nextQuery: text(data?.query) || query,
-        nextThreadId: threadId,
-        nextDomain: domain,
-        nextFilters: nextSelected,
-        updateUrl: true,
-      });
-    }
+    runSearch({
+      nextQuery: text(data?.query) || query,
+      nextThreadId: threadId,
+      nextSource: resolvedSource,
+      nextFilters: nextSelected,
+      updateUrl: true,
+    });
   }
 
   function clearFilters() {
     const cleared = filterStateFromGroups(filters.groups);
     setSelectedFilters(cleared);
 
-    if (data || text(query)) {
+    if (resolvedSource) {
       runSearch({
         nextQuery: text(data?.query) || query,
         nextThreadId: threadId,
-        nextDomain: domain,
+        nextSource: resolvedSource,
         nextFilters: cleared,
         updateUrl: true,
       });
@@ -216,8 +219,8 @@ export default function NexiSearchPage() {
 
   const results = asArray(data?.results);
   const submittedQuery = text(data?.query);
-  const hasSubmittedQuery = Boolean(submittedQuery);
   const activeFilterCount = Object.keys(cleanFilters(selectedFilters)).length;
+  const showFilters = Boolean(resolvedSource && asArray(filters.groups).length);
 
   return (
     <div className="page">
@@ -261,21 +264,9 @@ export default function NexiSearchPage() {
 
         <section className="oba-search-layout">
           <aside className="oba-filter-panel">
-            <div className="filter-card filter-card-open">
-              <div className="filter-card-title">Bron</div>
-              <div className="filter-options">
-                <label className="filter-select-row">
-                  <select value={domain} onChange={changeDomain} className="filter-select">
-                    <option value="collection">Collectie</option>
-                    <option value="agenda">Agenda</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-
             {filterLoading ? <div className="filter-empty">Filters laden...</div> : null}
 
-            {asArray(filters.groups).map((group) => (
+            {showFilters ? asArray(filters.groups).map((group) => (
               <div className="filter-card filter-card-open" key={group.key}>
                 <div className="filter-card-title">{group.label}</div>
                 <div className="filter-options">
@@ -295,7 +286,7 @@ export default function NexiSearchPage() {
                   })}
                 </div>
               </div>
-            ))}
+            )) : null}
 
             {activeFilterCount ? (
               <button type="button" className="filter-clear-button" onClick={clearFilters}>
@@ -307,16 +298,16 @@ export default function NexiSearchPage() {
           <main className="oba-results-panel">
             <div className="oba-results-heading">
               <div>
-                <h1>{hasSubmittedQuery ? `${submittedQuery} in ${domainLabel(domain)}` : "Zoeken met natuurlijke taal"}</h1>
+                <h1>{submittedQuery && resolvedSource ? `${submittedQuery} in ${sourceLabel(resolvedSource)}` : "Zoeken met natuurlijke taal"}</h1>
                 <div className="oba-result-count">
-                  {hasSubmittedQuery ? `${results.length.toLocaleString("nl-NL")} resultaten` : "Typ een natuurlijke-taal zoekvraag."}
+                  {submittedQuery ? `${results.length.toLocaleString("nl-NL")} resultaten` : "Typ een natuurlijke-taal zoekvraag."}
                 </div>
               </div>
             </div>
 
             {data?.response?.message ? <div className="info-card">{data.response.message}</div> : null}
 
-            {hasSubmittedQuery || data ? (
+            {submittedQuery || data ? (
               <section className="oba-result-list">
                 {results.length ? (
                   results.map((result, index) => {
@@ -324,7 +315,7 @@ export default function NexiSearchPage() {
                     const image = coverUrl(result);
                     const link = text(result.link || result.url);
                     const meta = resultMeta(result);
-                    const summary = text(result.summary || result.description || result.omschrijving || result.beschrijving);
+                    const beschrijving = text(result.beschrijving);
 
                     return (
                       <article className="oba-result-item" key={`${result.ppn || title || "result"}-${index}`}>
@@ -347,7 +338,7 @@ export default function NexiSearchPage() {
                           )}
 
                           {meta ? <div className="oba-result-meta">{meta}</div> : null}
-                          {summary ? <p className="oba-result-summary">{summary}</p> : null}
+                          {beschrijving ? <p className="oba-result-summary">{beschrijving}</p> : null}
                         </div>
                       </article>
                     );

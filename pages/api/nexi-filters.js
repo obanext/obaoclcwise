@@ -7,7 +7,7 @@ const text = (value) => {
 };
 
 export default async function handler(req, res) {
-  const domain = text(req.query.domain || "collection");
+  const domain = text(req.query.domain);
   const nexiBaseUrl = text(process.env.NEXI_BASE_URL || DEFAULT_NEXI_BASE_URL).replace(/\/$/, "");
 
   if (!domain) {

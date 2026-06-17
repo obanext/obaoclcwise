@@ -30,7 +30,7 @@ function normalizeResult(item = {}) {
     ppn: normalizeFirst(item.ppn),
     isbn: normalizeFirst(item.isbn),
     short_title: text(item.short_title || item.title || item.titel || item.name),
-    summary: text(item.summary || item.description || item.omschrijving || item.beschrijving),
+    beschrijving: text(item.beschrijving),
   };
 }
 
@@ -72,7 +72,7 @@ function responseFromBody(body, fallbackThreadId) {
 export default async function handler(req, res) {
   const query = text(req.query.q);
   const incomingThreadId = text(req.query.thread_id);
-  const filterDomain = text(req.query.filter_domain || req.query.domain);
+  const filterDomain = text(req.query.filter_domain);
   const filterValues = parseJsonParam(req.query.filters);
   const hasFilters = Object.values(filterValues).some((value) => text(value));
   const nexiBaseUrl = text(process.env.NEXI_BASE_URL || DEFAULT_NEXI_BASE_URL).replace(/\/$/, "");
