@@ -61,33 +61,63 @@ function sortLabel(sort = {}) {
   return SORT_LABELS[String(sort.id)] || text(sort.labelText || sort.labelKey || sort.id);
 }
 
-function extractFacetGroupsFromParsedJson(parsedJson = {}) {
-  const rawGroups = parsedJson?.facets?.facet || [];
+function extractFacetGroups(searchResponse = {}, perspectives = [], selectedPerspectiveId = "") {
+  const safeSearchResponse =
+    searchResponse && typeof searchResponse === "object" ? searchResponse : {};
 
-  return asArray(rawGroups)
+  const rawGroups =
+    safeSearchResponse.facets ||
+    safeSearchResponse.facet ||
+    safeSearchResponse.filters ||
+    safeSearchResponse.filter ||
+    safeSearchResponse.refinements ||
+    safeSearchResponse.refinement ||
+    [];
+
+  const groups = asArray(rawGroups)
     .map((group) => {
-      const groupAttributes = group?._attributes || {};
-      const label = text(groupAttributes.translation || groupAttributes.id);
-      const field = text(groupAttributes.id || groupAttributes.translation);
+      const label = text(group.labelText || group.labelKey || group.name || group.field || group.id);
+      const field = text(group.field || group.name || group.key || group.id || group.labelKey);
 
-      const values = asArray(group?.value)
-        .map((item) => {
-          const attributes = item?._attributes || {};
-          const value = text(attributes.id || attributes.translation);
-          const labelText = text(attributes.translation || attributes.id);
+      const rawValues =
+        group.values ||
+        group.value ||
+        group.items ||
+        group.options ||
+        group.entries ||
+        group.buckets ||
+        [];
 
-          return {
-            label: labelText,
-            value,
-            count: attributes.count ?? "",
-            facetFilter: field && value ? `${field}:${value}` : value,
-          };
-        })
+      const values = asArray(rawValues)
+        .map((item) => ({
+          label: text(item.labelText || item.label || item.name || item.value || item.key || item.id),
+          value: text(item.value || item.key || item.id || item.name || item.label),
+          count: item.count ?? item.total ?? item.numberOfResults ?? item.hits ?? "",
+          facetFilter:
+            text(item.facetFilter || item.filter || item.query) ||
+            (field && text(item.value || item.key || item.id || item.name || item.label)
+              ? `${field}:${text(item.value || item.key || item.id || item.name || item.label)}`
+              : ""),
+        }))
         .filter((item) => item.label || item.value);
 
       return { label, field, values };
     })
     .filter((group) => group.label || group.values.length);
+
+  if (groups.length) return groups;
+
+  const selectedPerspective =
+    asArray(perspectives).find((item) => String(item.id) === String(selectedPerspectiveId)) ||
+    asArray(perspectives)[0];
+
+  return asArray(selectedPerspective?.facets)
+    .map((facet) => ({
+      label: text(facet.labelText || facet.labelKey || facet.id),
+      field: text(facet.id || facet.labelKey),
+      values: [],
+    }))
+    .filter((group) => group.label);
 }
 
 export default function SearchPage() {
@@ -329,7 +359,7 @@ export default function SearchPage() {
 
   const sortings = asArray(selectedPerspective?.sortings);
   const searchScopes = asArray(selectedPerspective?.searchScopes);
-  const facetGroups = extractFacetGroupsFromParsedJson(parsedJson);
+  const facetGroups = extractFacetGroups(raw?.searchResponse, perspectives, perspectiveId);
 
   const csvRows = useMemo(() => buildSearchMappingRows(raw, mapped), [raw, mapped]);
 
@@ -642,6 +672,12 @@ export default function SearchPage() {
         </section>
 
         <section className="debug-section">
+          <div className="wrapper-card">
+            <div className="wrapper-card-label">Wrapper zoeken</div>
+            <h2>parsedJson = wrapperZoeken(raw)</h2>
+            <p>De zoekvisualisatie leest uit deze Aquabrowser-compatible parsed JSON. De OCLC/WISE data blijft alleen zichtbaar als controlebron.</p>
+          </div>
+
           <button type="button" className="tab-button" onClick={downloadCsv}>
             Download mapping CSV
           </button>
