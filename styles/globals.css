@@ -241,36 +241,6 @@ a {
   word-break: break-word;
 }
 
-
-.wrapper-card {
-  background: #fff;
-  border: 1px solid #d6d6d6;
-  border-radius: 18px;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
-}
-
-.wrapper-card-label {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #eeeeee;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.wrapper-card h2 {
-  margin: 0 0 8px;
-  font-size: 18px;
-}
-
-.wrapper-card p {
-  margin: 0;
-  color: #444;
-}
-
 /* Debug */
 
 .debug-section {

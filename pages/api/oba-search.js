@@ -1,4 +1,4 @@
-import { wrapperZoeken } from "../../mapping/wrappers";
+import { mapWiseSearchToObaFull } from "../../mapping/mapWiseSearchToObaFull";
 
 const BASE = "https://bibliotheek-accept1.wise.oclc.org/restapi";
 const BRANCH_ID = "1000";
@@ -178,8 +178,8 @@ export default async function handler(req, res) {
       },
     };
 
-    const parsedJson = wrapperZoeken(raw);
-    return res.status(200).json({ raw, parsedJson, mapped: parsedJson });
+    const mapped = mapWiseSearchToObaFull(raw);
+    return res.status(200).json({ raw, mapped });
   }
 
   let titleSummaryUrl =
@@ -228,6 +228,6 @@ export default async function handler(req, res) {
     },
   };
 
-  const parsedJson = wrapperZoeken(raw);
-  return res.status(200).json({ raw, parsedJson, mapped: parsedJson });
+  const mapped = mapWiseSearchToObaFull(raw);
+  return res.status(200).json({ raw, mapped });
 }
