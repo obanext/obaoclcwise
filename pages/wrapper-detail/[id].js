@@ -96,7 +96,7 @@ export default function Page() {
     setError("");
     setData(null);
 
-    fetch(`/api/oba-detail?id=${encodeURIComponent(id)}`)
+    fetch(`/api/wrapper-detail?id=${encodeURIComponent(id)}`)
       .then(async (response) => {
         const json = await response.json().catch(() => null);
 
@@ -448,7 +448,7 @@ export default function Page() {
           </details>
 
           <details className="debug-block">
-            <summary>Parsed JSON (Aquabrowser-compatible wrapper)</summary>
+            <summary>Wrapper detail — parsed JSON</summary>
 
             <div className="debug-content">
               <pre>{pretty(parsedJson)}</pre>
