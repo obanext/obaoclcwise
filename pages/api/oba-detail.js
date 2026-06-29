@@ -1,4 +1,4 @@
-import { mapWiseToObaFull } from "../../mapping/mapWiseToObaFull";
+import { wrapperDetail } from "../../mapping/wrappers";
 
 const BASE = "https://bibliotheek-accept1.wise.oclc.org/restapi";
 
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     debug: { calls: [title, availability, summary, items] }
   };
 
-  const mapped = mapWiseToObaFull(raw);
+  const parsedJson = wrapperDetail(raw);
 
-  res.status(200).json({ raw, mapped });
+  res.status(200).json({ raw, parsedJson, mapped: parsedJson });
 }
