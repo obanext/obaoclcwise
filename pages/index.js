@@ -11,7 +11,7 @@ const detailOptions = [
   {
     label: "IST oba.nl parsed json detailpagina",
     description:
-      "itemdetaildata wordt aangeleverd via OCLC/WISE endpoints geformateerd naar oba.nl geparseerd json model",
+      "itemdetaildata wordt aangeleverd via OCLC/WISE endpoints en geformatteerd naar het oba.nl parsed ABL XML JSON-model",
     href: "/oba-detail-parsed-json/842851",
     status: "Beschikbaar",
   },
