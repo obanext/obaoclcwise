@@ -16,6 +16,39 @@ const text = (value) => {
 const getBranchField = (branch, key) =>
   asArray(branch?.branches).find((item) => item?._attributes?.key === key)?._text || "";
 
+const ALLOWED_BRANCHES = ["1000", "1001", "1002", "1003", "1004"];
+
+const mapStatus = (status) => {
+  switch (text(status)) {
+    case "AVAILABLE": return "Aanwezig";
+    case "ON_LOAN": return "Uitgeleend";
+    case "MISSING": return "Niet beschikbaar";
+    case "IN_TRANSIT":
+    case "IN_TRANSIT_LINKED":
+    case "SIP_CHECK_IN": return "Onderweg";
+    default: return text(status);
+  }
+};
+
+const getMarcSingle = (mapped, tag, key) => {
+  const value = mapped?.["librarian-info"]?.record?.marc?.[tag]?.[tag];
+  if (Array.isArray(value)) {
+    return text(value.find((item) => item?._attributes?.key === key)?._text);
+  }
+  return value?._attributes?.key === key ? text(value?._text) : "";
+};
+
+const getMarcRepeating = (mapped, tag, key) =>
+  asArray(mapped?.["librarian-info"]?.record?.marc?.[tag])
+    .map((entry) => {
+      const value = entry?.[tag];
+      if (Array.isArray(value)) {
+        return text(value.find((item) => item?._attributes?.key === key)?._text);
+      }
+      return value?._attributes?.key === key ? text(value?._text) : "";
+    })
+    .filter(Boolean);
+
 function flattenOclc(value, prefix = "") {
   const rows = [];
 
@@ -112,19 +145,11 @@ export default function Page() {
 
   const topSpecs = useMemo(() => {
     return [
-      text(asArray(mapped?.formats?.format).map((item) => item?._text).filter(Boolean).join(", ")),
+      text(mapped?.formats?.format?._text),
       text(mapped?.languages?.language?._text),
       text(mapped?.publication?.publishers?.publisher?._text),
-      text(
-        [
-          mapped?.description?.pages?._text,
-          mapped?.description?.["physical-description"]?._text,
-          mapped?.description?.size?._text,
-        ]
-          .filter(Boolean)
-          .join(" ; ")
-      ),
-      text(mapped?.series?.title?._text),
+      text(mapped?.description?.["physical-description"]?._text),
+      text(mapped?.series?.["series-title"]?._text),
       text(mapped?.["target-audiences"]?.["target-audience"]?._text),
     ].filter(Boolean);
   }, [mapped]);
@@ -137,54 +162,51 @@ export default function Page() {
 
   const specRows = useMemo(() => {
     const rows = [
-      ["ISBN Nummer", text(mapped?.identifiers?.["isbn-id"]?._text)],
+      ["ISBN Nummer", asArray(mapped?.identifiers?.["isbn-id"]).map((item) => text(item?._text)).filter(Boolean).join(", ")],
       ["PPN Nummer", text(mapped?.identifiers?.["ppn-id"]?._text)],
-      ["Boekcode", text(mapped?.misc?.bookcode)],
-      ["Taal publicatie", text(mapped?.languages?.language?._text)],
-      ["Taal - Originele taal", text(mapped?.languages?.["original-language"]?._text)],
-      ["Hoofdtitel", title],
-      ["Algemene materiaalaanduiding", text(mapped?.misc?.material)],
-      ["Eerste verantwoordelijke", author],
-      [
-        "Titel - Volgende verantwoordelijken",
-        text(mapped?.contributors?.secondary?.statement || mapped?.contributors?.secondary?.lastName),
-      ],
-      ["Plaats van uitgave", text(mapped?.publication?.place?._text)],
-      ["Uitgever", text(mapped?.publication?.publishers?.publisher?._text)],
-      ["Jaar van uitgave", text(mapped?.publication?.year?._text)],
-      ["Pagina's", text(mapped?.description?.pages?._text)],
-      ["Collatie - Illustraties", text(mapped?.description?.["physical-description"]?._text)],
-      ["Centimeters", text(mapped?.description?.size?._text)],
-      ["Annotatie", text(mapped?.annotation?._text)],
-      ["Serietitel", text(mapped?.series?.title?._text)],
-      ["Auteur Functie", text(mapped?.contributors?.primary?.role)],
-      ["Auteur Achternaam", text(mapped?.contributors?.primary?.lastName)],
-      ["Auteur Voornaam", text(mapped?.contributors?.primary?.firstName)],
-      ["Trefwoord - Hoofd geleding", text(mapped?.subjects?.["topical-subject"]?.[0]?._text)],
-      ["SISO - Code", text(mapped?.classification?.siso?._text)],
-      ["Auteur - secundaire - Functie", text(mapped?.contributors?.secondary?.roles)],
-      ["Auteur - secundaire - Achternaam", text(mapped?.contributors?.secondary?.lastName)],
-      ["Auteur - secundaire - Voornaam", text(mapped?.contributors?.secondary?.firstName)],
-      ["Prod country", text(mapped?.misc?.prodCountry)],
-      ["Samenvatting - Tekst", summary],
-      ["Bestelnummer NBD Nummer", text(mapped?.misc?.nbd)],
+      ["Boekcode", getMarcSingle(mapped, "df059", "j")],
+      ["Taal publicatie", getMarcSingle(mapped, "df101", "a")],
+      ["Hoofdtitel", getMarcSingle(mapped, "df200", "a") || title],
+      ["Algemene materiaalaanduiding", getMarcSingle(mapped, "df200", "b")],
+      ["Eerste verantwoordelijke", getMarcSingle(mapped, "df200", "f") || author],
+      ["Titel - Volgende verantwoordelijken", getMarcSingle(mapped, "df200", "g")],
+      ["Plaats van uitgave", getMarcSingle(mapped, "df210", "a")],
+      ["Uitgever", getMarcSingle(mapped, "df210", "c") || text(mapped?.publication?.publishers?.publisher?._text)],
+      ["Jaar van uitgave", getMarcSingle(mapped, "df210", "d") || text(mapped?.publication?.year?._text)],
+      ["Pagina's", getMarcSingle(mapped, "df215", "a") || text(mapped?.description?.pages?._text)],
+      ["Collatie - Illustraties", getMarcSingle(mapped, "df215", "c")],
+      ["Centimeters", getMarcSingle(mapped, "df215", "d")],
+      ["Collatie - Bijlage's", getMarcSingle(mapped, "df215", "e")],
+      ["Serietitel", getMarcSingle(mapped, "df520", "a") || text(mapped?.series?.["series-title"]?._text)],
+      ["Volume", getMarcSingle(mapped, "df520", "v")],
+      ["Auteur Functie", getMarcSingle(mapped, "df700", "4")],
+      ["Auteur Achternaam", getMarcSingle(mapped, "df700", "a")],
+      ["Auteur Voornaam", getMarcSingle(mapped, "df700", "b")],
+      ["Trefwoord - Hoofd geleding", getMarcRepeating(mapped, "df630", "a").join(", ")],
+      ["Genre - Code", getMarcSingle(mapped, "df691", "a")],
+      ["Auteur - secundaire - Functie", getMarcRepeating(mapped, "df702", "4").join(", ")],
+      ["Auteur - secundaire - Achternaam", getMarcRepeating(mapped, "df702", "a").join(", ")],
+      ["Auteur - secundaire - Voornaam", getMarcRepeating(mapped, "df702", "b").join(", ")],
+      ["Bestelnummer NBD Nummer", getMarcSingle(mapped, "df014", "a")],
+      ["Samenvatting - Tekst", getMarcSingle(mapped, "df320", "a") || summary],
+      ["Prod country", getMarcSingle(mapped, "df044", "a")],
+      ["Editie", getMarcSingle(mapped, "df205", "a")],
     ];
 
     return rows.filter(([, value]) => value);
   }, [mapped, title, author, summary]);
 
   const availabilityRows = useMemo(() => {
-    return asArray(mapped?.["librarian-info"]?.record?.meta?.branches).map((branch, index) => ({
-      key: `${getBranchField(branch, "b") || "row"}-${index}`,
-      location:
-        getBranchField(branch, "locationName") ||
-        getBranchField(branch, "branchName") ||
-        getBranchField(branch, "s"),
-      place: getBranchField(branch, "m"),
-      shelf: getBranchField(branch, "k"),
-      status: getBranchField(branch, "status"),
-    }));
-  }, [mapped]);
+    return asArray(raw?.itemInformation)
+      .filter((item) => ALLOWED_BRANCHES.includes(String(item?.branchId)))
+      .map((item, index) => ({
+        key: `${text(item?.barcode || item?.id) || "row"}-${index}`,
+        location: text(item?.branchName),
+        place: text(item?.subLocation || item?.shelfDescription || item?.location),
+        shelf: text(item?.callNumber || item?.headWord),
+        status: mapStatus(item?.effectiveStatus),
+      }));
+  }, [raw]);
 
   const oclcRows = useMemo(() => {
     return [
@@ -194,8 +216,8 @@ export default function Page() {
       { type: "section", field: "availability — beschikbaarheid", value: "" },
       ...flattenOclc(raw?.availability, "availability"),
 
-      { type: "section", field: "summary — titelrelaties/samenvatting", value: "" },
-      ...flattenOclc(raw?.summary, "summary"),
+      { type: "section", field: "titleInfo — titelbasis/momkeys", value: "" },
+      ...flattenOclc(raw?.titleInfo, "titleInfo"),
 
       { type: "section", field: "itemInformation — holdings/exemplaren", value: "" },
       ...flattenOclc(raw?.itemInformation, "itemInformation"),

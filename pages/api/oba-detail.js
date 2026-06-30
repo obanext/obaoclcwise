@@ -23,19 +23,19 @@ export default async function handler(req, res) {
 
   if (!id) return res.status(400).json({ error: "missing id" });
 
-  const [title, availability, summary, items] = await Promise.all([
+  const [title, titleInfo, availability, items] = await Promise.all([
     fetchSafe(`${BASE}/discovery/title/${id}`),
-    fetchSafe(`${BASE}/branch/1000/titleavailability/${id}?clientType=PUBLIC`),
-    fetchSafe(`${BASE}/discovery/titlesummary/${id}`),
+    fetchSafe(`${BASE}/title/${id}`),
+    fetchSafe(`${BASE}/branch/1000/titleavailability/${id}?clientType=PUBLIC&holdsCount=true`),
     fetchSafe(`${BASE}/title/${id}/iteminformation`)
   ]);
 
   const raw = {
     title: title.body,
+    titleInfo: titleInfo.body,
     availability: availability.body,
-    summary: summary.body,
     itemInformation: items.body,
-    debug: { calls: [title, availability, summary, items] }
+    debug: { calls: [title, titleInfo, availability, items] }
   };
 
   const mapped = mapWiseToObaFull(raw);
