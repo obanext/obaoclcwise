@@ -1,3 +1,5 @@
+const ALLOWED_BRANCHES = ["1000", "1001", "1002", "1003", "1004"];
+const isAllowedBranch = (item = {}) => ALLOWED_BRANCHES.includes(String(item.branchId || item.branchCode || ""));
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 const text = (value) => {
   if (typeof value === "string") return value.trim();
@@ -388,7 +390,7 @@ function buildMarc(input) {
 }
 
 function buildBranches(items = [], availability = {}, imprint = {}, publicationYear = "") {
-  return asArray(items).map((item) => {
+  return asArray(items).filter(isAllowedBranch).map((item) => {
     const status = mapStatus(item.effectiveStatus || item.status);
     const dueDate = first(item.dueDate, item.expectedReturnDate, item.returnDate);
     const availabilityText = dueDate && status === "Uitgeleend" ? `Uitgeleend tot ${formatDate(dueDate)}` : status;
@@ -434,7 +436,7 @@ function buildBranches(items = [], availability = {}, imprint = {}, publicationY
 
 function buildBranchBlocks(items = []) {
   const unique = new Map();
-  asArray(items).forEach((item) => {
+  asArray(items).filter(isAllowedBranch).forEach((item) => {
     const id = text(item.branchId || item.branchCode || item.branchName);
     const name = text(item.branchName || id);
     if (id && !unique.has(id)) unique.set(id, name);

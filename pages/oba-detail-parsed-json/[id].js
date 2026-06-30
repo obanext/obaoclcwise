@@ -270,7 +270,6 @@ export default function Page() {
       <div className="container detail-page">
         <section className="hero">
           <div className="hero-left">
-            <div className="preselect-status active">IST oba.nl parsed json detailpagina</div>
             <h1 className="title">{title || shortTitle || "Onbekende titel"}</h1>
 
             {subtitle && subtitle !== title && subtitle !== shortTitle ? (
