@@ -16,30 +16,6 @@ const text = (value) => {
 const getBranchField = (branch, key) =>
   asArray(branch?.branches).find((item) => item?._attributes?.key === key)?._text || "";
 
-const nodeText = (value) => {
-  if (Array.isArray(value)) return value.map(nodeText).filter(Boolean).join(", ");
-  if (value && typeof value === "object") return text(value._text);
-  return text(value);
-};
-
-const nodeAttr = (value, key) => text(value?._attributes?.[key]);
-
-const firstNode = (value) => asArray(value)[0] || null;
-
-const nodeListText = (value) => asArray(value).map(nodeText).filter(Boolean).join(", ");
-
-const marcText = (mapped, field, key = "a") => {
-  const marc = mapped?.["librarian-info"]?.record?.marc || {};
-  const wrapper = marc?.[field];
-  const nodes = asArray(wrapper?.[field]);
-  const match = nodes.find((item) => nodeAttr(item, "key") === key);
-  return nodeText(match);
-};
-
-function formatNodeList(value) {
-  return asArray(value).map((item) => nodeText(item)).filter(Boolean).join(", ");
-}
-
 function flattenOclc(value, prefix = "") {
   const rows = [];
 
@@ -125,7 +101,7 @@ export default function Page() {
 
   const title = text(mapped?.titles?.title?._text);
   const shortTitle = text(mapped?.titles?.["short-title"]?._text);
-  const subtitle = text(mapped?.titles?.["origin-title"]?._text);
+  const subtitle = text(mapped?.titles?.subtitle?._text);
   const author = text(mapped?.authors?.["main-author"]?._text);
   const summary = text(mapped?.summaries?.summary?._text);
 
@@ -149,7 +125,7 @@ export default function Page() {
           .filter(Boolean)
           .join(" ; ")
       ),
-      formatNodeList(mapped?.series?.["series-title"]),
+      text(mapped?.series?.title?._text),
       text(mapped?.["target-audiences"]?.["target-audience"]?._text),
     ].filter(Boolean);
   }, [mapped]);
@@ -164,36 +140,35 @@ export default function Page() {
     const rows = [
       ["ISBN Nummer", text(mapped?.identifiers?.["isbn-id"]?._text)],
       ["PPN Nummer", text(mapped?.identifiers?.["ppn-id"]?._text)],
-      ["Boekcode", text(mapped?.id?._attributes?.nativeid)],
+      ["Boekcode", text(mapped?.misc?.bookcode)],
       ["Taal publicatie", text(mapped?.languages?.language?._text)],
       ["Taal - Originele taal", text(mapped?.languages?.["original-language"]?._text)],
       ["Hoofdtitel", title],
-      ["Algemene materiaalaanduiding", formatNodeList(mapped?.formats?.format)],
+      ["Algemene materiaalaanduiding", text(mapped?.misc?.material)],
       ["Eerste verantwoordelijke", author],
-
       [
         "Titel - Volgende verantwoordelijken",
-        formatNodeList(mapped?.authors?.author),
+        text(mapped?.contributors?.secondary?.statement || mapped?.contributors?.secondary?.lastName),
       ],
-      ["Plaats van uitgave", nodeAttr(mapped?.publication?.publishers?.publisher, "place")],
+      ["Plaats van uitgave", text(mapped?.publication?.place?._text)],
       ["Uitgever", text(mapped?.publication?.publishers?.publisher?._text)],
       ["Jaar van uitgave", text(mapped?.publication?.year?._text)],
       ["Pagina's", text(mapped?.description?.pages?._text)],
       ["Collatie - Illustraties", text(mapped?.description?.["physical-description"]?._text)],
-      ["Centimeters", marcText(mapped, "df215", "d")],
-      ["Annotatie", formatNodeList(mapped?.notes?.note)],
-      ["Serietitel", formatNodeList(mapped?.series?.["series-title"])],
-      ["Auteur Functie", nodeAttr(mapped?.authors?.["main-author"], "localized-type") || nodeAttr(mapped?.authors?.["main-author"], "translation")],
-      ["Auteur Achternaam", nodeAttr(mapped?.authors?.["main-author"], "lastname")],
-      ["Auteur Voornaam", nodeAttr(mapped?.authors?.["main-author"], "firstname")],
-      ["Trefwoord - Hoofd geleding", nodeText(firstNode(mapped?.subjects?.["topical-subject"]))],
-      ["SISO - Code", nodeText(mapped?.classification?.["siso-code"])],
-      ["Auteur - secundaire - Functie", asArray(mapped?.authors?.author).map((item) => nodeAttr(item, "localized-type") || nodeAttr(item, "translation")).filter(Boolean).join(", ")],
-      ["Auteur - secundaire - Achternaam", asArray(mapped?.authors?.author).map((item) => nodeAttr(item, "lastname")).filter(Boolean).join(", ")],
-      ["Auteur - secundaire - Voornaam", asArray(mapped?.authors?.author).map((item) => nodeAttr(item, "firstname")).filter(Boolean).join(", ")],
-      ["Prod country", marcText(mapped, "df044", "a")],
+      ["Centimeters", text(mapped?.description?.size?._text)],
+      ["Annotatie", text(mapped?.annotation?._text)],
+      ["Serietitel", text(mapped?.series?.title?._text)],
+      ["Auteur Functie", text(mapped?.contributors?.primary?.role)],
+      ["Auteur Achternaam", text(mapped?.contributors?.primary?.lastName)],
+      ["Auteur Voornaam", text(mapped?.contributors?.primary?.firstName)],
+      ["Trefwoord - Hoofd geleding", text(mapped?.subjects?.["topical-subject"]?.[0]?._text)],
+      ["SISO - Code", text(mapped?.classification?.siso?._text)],
+      ["Auteur - secundaire - Functie", text(mapped?.contributors?.secondary?.roles)],
+      ["Auteur - secundaire - Achternaam", text(mapped?.contributors?.secondary?.lastName)],
+      ["Auteur - secundaire - Voornaam", text(mapped?.contributors?.secondary?.firstName)],
+      ["Prod country", text(mapped?.misc?.prodCountry)],
       ["Samenvatting - Tekst", summary],
-      ["Bestelnummer NBD Nummer", marcText(mapped, "df014", "a")],
+      ["Bestelnummer NBD Nummer", text(mapped?.misc?.nbd)],
     ];
 
     return rows.filter(([, value]) => value);
@@ -423,6 +398,12 @@ export default function Page() {
         )}
 
         <section className="debug-section">
+          <div className="wrapper-card">
+            <div className="wrapper-card-label">Wrapper detail</div>
+            <h2>parsedJson = wrapperDetail(raw)</h2>
+            <p>De detailvisualisatie leest uit deze Aquabrowser-compatible parsed JSON. De OCLC/WISE data blijft alleen zichtbaar als controlebron.</p>
+          </div>
+
           <button type="button" className="tab-button" onClick={downloadCsv}>
             Download mapping CSV
           </button>
