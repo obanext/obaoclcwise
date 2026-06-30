@@ -14,20 +14,18 @@ async function fetchSafe(url) {
     const body = await res.json().catch(() => null);
     return { url, status: res.status, body };
   } catch (error) {
-    return { url, status: 500, body: null, error: error?.message || "fetch failed" };
+    return { url, status: 500, body: null, error: error.message };
   }
 }
 
 export default async function handler(req, res) {
-  const { id } = req.query;
+  const { id, branchId = "1000" } = req.query;
 
   if (!id) return res.status(400).json({ error: "missing id" });
 
-  // Endpointset gekozen voor de OCLC/Wise → OBA parsed JSON-compatible detailroute.
-  // De losse item-availability endpoints zijn getest en vallen af voor deze ingang.
   const [title, availability, summary, items] = await Promise.all([
     fetchSafe(`${BASE}/discovery/title/${id}`),
-    fetchSafe(`${BASE}/branch/1000/titleavailability/${id}?clientType=PUBLIC`),
+    fetchSafe(`${BASE}/branch/${encodeURIComponent(branchId)}/titleavailability/${id}?clientType=PUBLIC`),
     fetchSafe(`${BASE}/discovery/titlesummary/${id}`),
     fetchSafe(`${BASE}/title/${id}/iteminformation`),
   ]);
@@ -39,19 +37,7 @@ export default async function handler(req, res) {
     itemInformation: items.body,
     debug: {
       contract: "oba-parsed-json-compatible",
-      routePurpose: "OCLC/Wise responses mapped to the current OBA debug parsed JSON detail model",
-      endpointDecision: {
-        included: [
-          "/discovery/title/{id}",
-          "/branch/1000/titleavailability/{id}?clientType=PUBLIC",
-          "/discovery/titlesummary/{id}",
-          "/title/{id}/iteminformation",
-        ],
-        excluded: [
-          "/item/{itemIds}/availabilitywithstatusdescription",
-          "/items/{itemIds}/availability?includeTitleAvailability=true",
-        ],
-      },
+      branchId,
       calls: [title, availability, summary, items],
     },
   };
