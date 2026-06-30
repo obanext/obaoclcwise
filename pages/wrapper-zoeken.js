@@ -146,7 +146,7 @@ export default function SearchPage() {
     }
 
     const timer = setTimeout(() => {
-      fetch(`/api/oba-search?q=${encodeURIComponent(q)}&suggest=1&searchScope=${encodeURIComponent(searchScope)}`)
+      fetch(`/api/wrapper-zoeken?q=${encodeURIComponent(q)}&suggest=1&searchScope=${encodeURIComponent(searchScope)}`)
         .then((response) => response.json())
         .then((json) => {
           const values = asArray(json?.suggestions)
@@ -185,7 +185,7 @@ export default function SearchPage() {
       if (text(filter)) params.append("facetFilter", text(filter));
     });
 
-    return `/oba-search?${params.toString()}`;
+    return `/wrapper-zoeken?${params.toString()}`;
   }
 
   function buildApiUrl({
@@ -209,7 +209,7 @@ export default function SearchPage() {
       if (text(filter)) params.append("facetFilter", text(filter));
     });
 
-    return `/api/oba-search?${params.toString()}`;
+    return `/api/wrapper-zoeken?${params.toString()}`;
   }
 
   function runSearch({
@@ -366,7 +366,7 @@ export default function SearchPage() {
         <nav className="oba-breadcrumbs" aria-label="Broodkruimelpad">
           <button type="button" className="oba-chip" onClick={() => router.back()}>← Terug</button>
           <span className="oba-chip oba-chip-dark">⌂</span>
-          <span className="oba-chip">Zoeken</span>
+          <span className="oba-chip">Wrapper zoeken</span>
         </nav>
 
         <section className="oba-search-top">
@@ -575,7 +575,7 @@ export default function SearchPage() {
 
                     return (
                       <article className="oba-result-item" key={`${detailId}-${index}`}>
-                        <Link href={`/oba-detail/${encodeURIComponent(detailId)}`} className="oba-result-cover-link">
+                        <Link href={`/wrapper-detail/${encodeURIComponent(detailId)}`} className="oba-result-cover-link">
                           {image ? (
                             <img src={image} alt={title || "Cover"} className="oba-result-cover" />
                           ) : (
@@ -584,7 +584,7 @@ export default function SearchPage() {
                         </Link>
 
                         <div className="oba-result-body">
-                          <Link href={`/oba-detail/${encodeURIComponent(detailId)}`} className="oba-result-title">
+                          <Link href={`/wrapper-detail/${encodeURIComponent(detailId)}`} className="oba-result-title">
                             {title || "Onbekende titel"}
                           </Link>
 
@@ -665,7 +665,7 @@ export default function SearchPage() {
           </details>
 
           <details className="debug-block">
-            <summary>Parsed JSON (Aquabrowser-compatible wrapper)</summary>
+            <summary>Wrapper zoeken — parsed JSON</summary>
             <div className="debug-content">
               <pre>{pretty(parsedJson)}</pre>
             </div>

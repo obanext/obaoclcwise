@@ -52,6 +52,23 @@ const searchOptions = [
   },
 ];
 
+const wrapperOptions = [
+  {
+    label: "Wrapper detailpagina",
+    description:
+      "OCLC Wise detaildata wordt via wrapperDetail(raw) omgezet naar volledige Aquabrowser-compatible parsed JSON; de visualisatie leest uit die parsed JSON.",
+    href: "/wrapper-detail/842851",
+    status: "Beschikbaar",
+  },
+  {
+    label: "Wrapper zoekpagina",
+    description:
+      "OCLC Wise zoekdata wordt via wrapperZoeken(raw) omgezet naar volledige Aquabrowser-compatible parsed JSON; de visualisatie leest uit die parsed JSON.",
+    href: "/wrapper-zoeken",
+    status: "Beschikbaar",
+  },
+];
+
 const oldSchoolOptions = [
   {
     label: "OLD SCHOOL voorselectie zoekbalk",
@@ -127,6 +144,7 @@ export default function HomePage() {
 
         <OptionSection title="detailpagina" options={detailOptions} />
         <OptionSection title="zoekpagina" options={searchOptions} />
+        <OptionSection title="wrapper parsed JSON" options={wrapperOptions} />
         <OptionSection title="old school Aquabrowser-functies" options={oldSchoolOptions} />
       </div>
     </main>
