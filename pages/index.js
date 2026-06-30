@@ -11,7 +11,7 @@ const detailOptions = [
   {
     label: "IST oba.nl parsed json detailpagina",
     description:
-      "OCLC Wise data wordt via een adapter gemapt naar een OBA parsed JSON-compatible detailmodel en daarna gerenderd.",
+      "OCLC Wise data wordt geladen via de gekozen detail-endpoints en gemapt naar het OBA debug parsed JSON-model.",
     href: "/oba-detail-parsed-json/842851",
     status: "Beschikbaar",
   },
