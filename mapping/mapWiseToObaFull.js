@@ -35,10 +35,10 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
 
   return {
     _attributes: {
-      version: "1",
+      version: "",
       "before-rendering-time": "",
       "total-time": "",
-      "detail-level": "Librarian",
+      "detail-level": "",
     },
 
     meta: {
@@ -47,14 +47,14 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
 
     id: {
       _attributes: {
-        nativeid: text(title.id),
-        ds: "library/v/OBA",
+        nativeid: "",
+        ds: "",
         translation: "ID",
-        "search-method": "id",
-        "search-term": title.id ? `|oba-catalogus|${title.id}` : "",
-        "search-type": "precise",
+        "search-method": "",
+        "search-term": "",
+        "search-type": "",
       },
-      _text: title.id ? `|oba-catalogus|${title.id}` : "",
+      _text: text(title.id),
     },
 
     frabl: {
@@ -68,7 +68,7 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
     },
 
     "detail-page": {
-      _text: buildDetailPageUrl(title, formattedAuthor),
+      _text: "",
     },
 
     coverimages: {
@@ -326,7 +326,7 @@ function buildUndupInfo(title = {}, formattedAuthor = "") {
   const frabl = text(title.frbrkey || title.frbrKey);
   return {
     _attributes: {
-      key: title.id ? `|oba-catalogus|${title.id}` : "",
+      key: "",
       cnt: "0",
       sort: "year",
       frabl,
@@ -584,19 +584,6 @@ function prodCountry(title = {}) {
   const source = text(title.source).toLowerCase();
   if (source === "nbd") return "ne";
   return "";
-}
-
-function buildDetailPageUrl(title = {}, author = "") {
-  const id = text(title.id);
-  if (!id) return "";
-  const safeAuthor = encodePathPart(author || "onbekend");
-  const safeTitle = encodePathPart(title.title || title.mainTitle || "titel");
-  const safeFormat = encodePathPart(title.media?.description || "Materiaal");
-  return `http://zoeken.oba.nl/detail/${safeAuthor}/${safeTitle}/${safeFormat}/?itemid=%7coba-catalogus%7c${id}`;
-}
-
-function encodePathPart(value = "") {
-  return text(value).replace(/\s+/g, "-").replace(/[^a-zA-Z0-9À-ž_-]/g, "");
 }
 
 function buildBranches(items = []) {
