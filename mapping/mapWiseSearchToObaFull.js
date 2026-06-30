@@ -1,19 +1,39 @@
-import {
-  asArray,
-  text,
-  first,
-  textNode,
-  attrOnlyNode,
-  oneOrMany,
-  isNumericId,
-  splitName,
-  formatRawFromMedia,
-  languageCode,
-  languageDescription,
-  buildRctx,
-  buildUndupInfo,
-  buildSortOptions,
-} from "./aquabrowserCompat.js";
+const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+
+const text = (value) => {
+  if (typeof value === "string") return value.trim();
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+};
+
+const first = (...values) => values.find((value) => text(value)) || "";
+
+function isNumericId(value) {
+  return /^\d+$/.test(text(value));
+}
+
+function splitName(value = "") {
+  const source = text(value);
+
+  if (!source) {
+    return { first: "", last: "" };
+  }
+
+  if (source.includes(",")) {
+    const [last = "", ...rest] = source.split(",");
+    return {
+      first: text(rest.join(", ")),
+      last: text(last),
+    };
+  }
+
+  const parts = source.split(/\s+/).filter(Boolean);
+
+  return {
+    first: text(parts.slice(0, -1).join(" ")),
+    last: text(parts.slice(-1).join(" ")),
+  };
+}
 
 function getDetailId(entry = {}) {
   const id = first(entry.resolvedDetailId, entry.id, entry.title?.id);
@@ -25,18 +45,22 @@ function coverImage(title = {}) {
 }
 
 function normalizeFormat(title = {}) {
-  const mediaText = text(title.media?.description);
-  const raw = formatRawFromMedia(title.media || {});
-  if (!mediaText && !raw) return [];
+  const media = text(title.media?.description);
+  const raw = text(title.media?.icon).toLowerCase();
+
+  if (!media && !raw) return [];
 
   return [
-    textNode(mediaText, {
-      translation: "Formaat",
-      "search-method": "format",
-      "search-term": raw,
-      "search-type": "searcher",
-      raw,
-    }),
+    {
+      _attributes: {
+        translation: "Formaat",
+        "search-method": "format",
+        "search-term": raw,
+        "search-type": "searcher",
+        raw,
+      },
+      _text: media,
+    },
   ];
 }
 
@@ -48,28 +72,15 @@ function normalizeSubjects(title = {}) {
   ]
     .map((subject) => text(subject?.description || subject?._text || subject?.label || subject))
     .filter(Boolean)
-    .map((value) =>
-      textNode(value, {
+    .map((value) => ({
+      _attributes: {
         translation: "Onderwerp",
         "search-method": "subject",
         "search-term": value,
         "search-type": "fuzzy,precise",
-      })
-    );
-}
-
-function normalizeGenre(title = {}) {
-  return [...asArray(title.genre), ...asArray(title.genreForms)]
-    .map((genre) => text(genre?.description || genre?._text || genre))
-    .filter(Boolean)
-    .map((value) =>
-      textNode(value, {
-        translation: "Genre",
-        "search-method": "genre",
-        "search-term": value,
-        "search-type": "searcher",
-      })
-    );
+      },
+      _text: value,
+    }));
 }
 
 function normalizeResult(entry = {}) {
@@ -77,7 +88,7 @@ function normalizeResult(entry = {}) {
   if (!detailId) return null;
 
   const title = entry.title || {};
-  const frabl = first(entry.sourceId, title.frbrkey, title.id, `FRBR:G:${detailId}`);
+  const sourceId = text(entry.sourceId || title.frbrkey || title.id);
   const authorName = text(title.author?.description || title.author);
   const authorParts = splitName(authorName);
   const isbn = text(asArray(title.isbn)[0]);
@@ -85,192 +96,194 @@ function normalizeResult(entry = {}) {
   const language = asArray(title.language)[0] || {};
   const formats = normalizeFormat(title);
   const subjects = normalizeSubjects(title);
-  const genres = normalizeGenre(title);
-  const titleText = text(title.title || title.mainTitle);
-  const shortTitle = first(title.mainTitle, title.title);
 
-  const result = {
-    id: textNode(`|oba-catalogus|${detailId}`, {
-      nativeid: detailId,
-      sourceid: frabl,
-      ds: "library/v/OBA",
-      translation: "ID",
-      "search-method": "id",
-      "search-term": `|oba-catalogus|${detailId}`,
-      "search-type": "precise",
-    }),
+  return {
+    id: {
+      _attributes: {
+        nativeid: detailId,
+        sourceid: sourceId,
+        ds: "library/v/OBA",
+        translation: "ID",
+        "search-method": "id",
+        "search-term": `|oba-catalogus|${detailId}`,
+        "search-type": "precise",
+      },
+      _text: `|oba-catalogus|${detailId}`,
+    },
 
-    frabl: textNode(frabl, {
-      translation: "FRBR Nummer (FRABL)",
-      "search-method": "frabl",
-      "search-term": frabl,
-      "search-type": "searcher",
-    }),
-
-    "detail-page": textNode(`/oba-detail/${encodeURIComponent(detailId)}`),
+    "detail-page": {
+      _text: `/oba-detail/${encodeURIComponent(detailId)}`,
+    },
 
     coverimages: {
-      coverimage: textNode(coverImage(title), { translation: "Cover" }),
+      coverimage: {
+        _attributes: {
+          translation: "Cover",
+        },
+        _text: coverImage(title),
+      },
     },
 
     titles: {
-      title: textNode(titleText, {
-        translation: "Titel",
-        "search-method": "title",
-        "search-term": titleText,
-        "search-type": "fuzzy",
-      }),
-      "short-title": textNode(shortTitle, { translation: "Korte titel" }),
+      title: {
+        _attributes: {
+          translation: "Titel",
+          "search-method": "title",
+          "search-term": text(title.title || title.mainTitle),
+          "search-type": "fuzzy",
+        },
+        _text: text(title.title || title.mainTitle),
+      },
+      "short-title": {
+        _attributes: {
+          translation: "Korte titel",
+        },
+        _text: first(title.mainTitle, title.title),
+      },
     },
 
     authors: {
-      "main-author": textNode(authorName, {
-        "search-method": "author",
-        "search-term": authorName,
-        "search-type": "searcher",
-        translation: "Auteur (hoofd)",
-        firstname: authorParts.first,
-        lastname: authorParts.last,
-        creatortype: authorName ? "person" : "",
-        main: "true",
-      }),
+      "main-author": {
+        _attributes: {
+          "search-method": "author",
+          "search-term": authorName,
+          "search-type": "searcher",
+          translation: "Auteur (hoofd)",
+          firstname: authorParts.first,
+          lastname: authorParts.last,
+          creatortype: authorName ? "person" : "",
+          main: "true",
+        },
+        _text: authorName,
+      },
     },
 
-    formats: { format: oneOrMany(formats) },
+    formats: {
+      format: formats,
+    },
 
     publication: {
-      year: textNode(text(title.publicationYear), {
-        translation: "Publicatiejaar",
-        "search-method": "year",
-        "search-term": text(title.publicationYear),
-        "search-type": "searcher",
-      }),
-      publishers: {
-        publisher: textNode(first(title.publisher, title.publicationDetails, title.imprint), {
-          translation: "Uitgever",
-          "search-method": "publisher",
-          "search-term": text(title.publisher),
+      year: {
+        _attributes: {
+          translation: "Publicatiejaar",
+          "search-method": "year",
+          "search-term": text(title.publicationYear),
           "search-type": "searcher",
-          year: text(title.publicationYear),
-          place: "",
-        }),
+        },
+        _text: text(title.publicationYear),
+      },
+      publishers: {
+        publisher: {
+          _attributes: {
+            translation: "Uitgever",
+            "search-method": "publisher",
+            "search-term": text(title.publisher),
+            "search-type": "searcher",
+            year: text(title.publicationYear),
+            place: "",
+          },
+          _text: first(title.publisher, title.publicationDetails, title.imprint),
+        },
       },
     },
 
     languages: {
-      language: textNode(languageDescription(language), {
-        translation: "Taal",
-        "search-method": "language",
-        "search-term": languageCode(language),
-        "search-type": "searcher",
-        raw: languageCode(language),
-      }),
+      language: {
+        _attributes: {
+          translation: "Taal",
+          "search-method": "language",
+          "search-term": text(language.code).toLowerCase(),
+          "search-type": "searcher",
+          raw: text(language.code).toLowerCase(),
+        },
+        _text: text(language.description || language),
+      },
     },
 
     description: {
-      pages: textNode(text(title.annotationCollation).split(":")[0]?.trim() || "", {
-        translation: "Pagina's",
-      }),
-      "physical-description": textNode(text(title.annotationCollation), {
-        translation: "Kenmerken",
-      }),
+      pages: {
+        _attributes: {
+          translation: "Pagina's",
+        },
+        _text: text(title.annotationCollation).split(":")[0]?.trim() || "",
+      },
+      "physical-description": {
+        _attributes: {
+          translation: "Kenmerken",
+        },
+        _text: text(title.annotationCollation),
+      },
     },
 
     summaries: {
-      summary: textNode(first(title.contents, title.contentsSchoolWise, title.summary), {
-        translation: "Samenvatting",
-      }),
+      summary: {
+        _attributes: {
+          translation: "Samenvatting",
+        },
+        _text: first(title.contents, title.contentsSchoolWise, title.summary),
+      },
     },
 
-    subjects: { "topical-subject": oneOrMany(subjects) },
+    subjects: {
+      "topical-subject": subjects,
+    },
 
     "target-audiences": {
-      "target-audience": textNode(text(title.audience?.description), {
-        translation: "Doelgroep",
-        "search-method": "targetaudience",
-        "search-term": text(title.audience?.code),
-        "search-type": "searcher",
-        raw: text(title.audience?.code),
-      }),
+      "target-audience": {
+        _attributes: {
+          translation: "Doelgroep",
+          "search-method": "targetaudience",
+          "search-term": text(title.audience?.code),
+          "search-type": "searcher",
+          raw: text(title.audience?.code),
+        },
+        _text: text(title.audience?.description),
+      },
     },
 
     identifiers: {
-      "isbn-id": textNode(isbn, {
-        "search-method": "isbn",
-        "search-term": isbn,
-        "search-type": "searcher",
-        translation: "ISBN",
-      }),
-      "normalized-isbn-id": textNode(isbn, {
-        translation: "ISBN (genormaliseerd)",
-      }),
-      "ppn-id": textNode(ppn, {
-        "search-method": "ppn",
-        "search-term": ppn,
-        "search-type": "precise",
-        translation: "PICA productienummer",
-      }),
+      "isbn-id": {
+        _attributes: {
+          "search-method": "isbn",
+          "search-term": isbn,
+          "search-type": "searcher",
+          translation: "ISBN",
+        },
+        _text: isbn,
+      },
+      "normalized-isbn-id": {
+        _attributes: {
+          translation: "ISBN (genormaliseerd)",
+        },
+        _text: isbn,
+      },
+      "ppn-id": {
+        _attributes: {
+          "search-method": "ppn",
+          "search-term": ppn,
+          "search-type": "precise",
+          translation: "PICA productienummer",
+        },
+        _text: ppn,
+      },
     },
 
-    "undup-info": buildUndupInfo({ detailId, frabl, title: titleText, author: authorName }),
+    "undup-info": {
+      _attributes: {
+        key: `|oba-catalogus|${detailId}`,
+        cnt: "",
+        sort: "year",
+        frabl: sourceId,
+        "frabl-global-count": "",
+        "frabl-key1": text(title.title || title.mainTitle),
+        "frabl-key2": authorName,
+        translation: "Informatie over dubbele items",
+        "undup-all-search": "",
+      },
+    },
 
     custom: {},
   };
-
-  if (genres.length) result.genres = { genre: oneOrMany(genres) };
-  if (asArray(title.titleSeries).length) {
-    result.series = {
-      "series-title": oneOrMany(
-        asArray(title.titleSeries).map((series) =>
-          textNode(text(series.description || series), {
-            translation: "In de reeks",
-            "search-method": "series",
-            "search-term": text(series.description || series),
-            "search-type": "searcher",
-          })
-        )
-      ),
-    };
-  }
-
-  return result;
-}
-
-function normalizeFacetValue(value = {}) {
-  const id = first(value.id, value.code, value.value, value.key, value.description, value.label);
-  const label = first(value.translation, value.description, value.label, value.name, id);
-  const count = first(value.count, value.total, value.amount, "");
-  return attrOnlyNode({ count: text(count), id: text(id), translation: text(label) });
-}
-
-function normalizeFacets(raw = {}) {
-  const source = raw.searchResponse || {};
-  const facetCandidates = asArray(source.facets || source.facet || source.filters || source.refinements);
-
-  const mapped = facetCandidates
-    .map((facet) => {
-      const id = first(facet.id, facet.code, facet.name, facet.field, facet.key);
-      const translation = first(facet.translation, facet.description, facet.label, facet.name, id);
-      const values = asArray(facet.value || facet.values || facet.options || facet.items)
-        .map(normalizeFacetValue)
-        .filter((value) => text(value?._attributes?.id || value?._attributes?.translation));
-
-      if (!id && !translation && !values.length) return null;
-
-      return {
-        _attributes: {
-          id: text(id),
-          translation: text(translation),
-          ...(facet.more ? { more: text(facet.more) } : {}),
-        },
-        value: values,
-      };
-    })
-    .filter(Boolean);
-
-  // Aquabrowser heeft altijd een facets-schil op zoekniveau. Als WISE nog geen
-  // facets levert, houden we de schil stabiel en leeg.
-  return { facet: mapped };
 }
 
 export function mapWiseSearchToObaFull(raw = {}) {
@@ -279,29 +292,41 @@ export function mapWiseSearchToObaFull(raw = {}) {
   );
 
   const results = titles.map(normalizeResult).filter(Boolean);
-  const activeSort = text(raw.selectedSort || "relevance") || "relevance";
 
   return {
     _attributes: {
       version: "1",
-      "before-rendering-time": "0",
-      "total-time": "0",
       "detail-level": "Default",
       source: "oclc-wise",
     },
 
     meta: {
-      count: textNode(String(raw.total || results.length || 0)),
-      page: textNode(String(raw.page || 1)),
-      rctx: textNode(buildRctx(`${text(raw.query)}:${text(raw.page || 1)}`)),
+      count: {
+        _text: String(raw.total || results.length || 0),
+      },
+      page: {
+        _text: String(raw.page || 1),
+      },
+      query: {
+        _text: text(raw.query),
+      },
     },
 
     feedbacks: {},
 
-    results: { result: results },
+    results: {
+      result: results,
+    },
 
-    facets: normalizeFacets(raw),
-
-    sort: buildSortOptions(activeSort),
+    suggestions: {
+      suggestion: asArray(raw.suggestions)
+        .map((item) => ({
+          _text:
+            typeof item === "string"
+              ? item
+              : text(item?.text || item?.value || item?.suggestion || item?.term),
+        }))
+        .filter((item) => item._text),
+    },
   };
 }

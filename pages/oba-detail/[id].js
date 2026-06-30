@@ -94,8 +94,7 @@ export default function Page() {
     };
   }, [router.isReady, id]);
 
-  const parsedJson = data?.parsedJson || data?.mapped || {};
-  const mapped = parsedJson;
+  const mapped = data?.mapped || {};
   const raw = data?.raw || {};
   const calls = asArray(raw?.debug?.calls);
 
@@ -398,12 +397,6 @@ export default function Page() {
         )}
 
         <section className="debug-section">
-          <div className="wrapper-card">
-            <div className="wrapper-card-label">Wrapper detail</div>
-            <h2>parsedJson = wrapperDetail(raw)</h2>
-            <p>De detailvisualisatie leest uit deze Aquabrowser-compatible parsed JSON. De OCLC/WISE data blijft alleen zichtbaar als controlebron.</p>
-          </div>
-
           <button type="button" className="tab-button" onClick={downloadCsv}>
             Download mapping CSV
           </button>
@@ -429,10 +422,10 @@ export default function Page() {
           </details>
 
           <details className="debug-block">
-            <summary>Parsed JSON (Aquabrowser-compatible wrapper)</summary>
+            <summary>Mapped output</summary>
 
             <div className="debug-content">
-              <pre>{pretty(parsedJson)}</pre>
+              <pre>{pretty(mapped)}</pre>
             </div>
           </details>
         </section>
