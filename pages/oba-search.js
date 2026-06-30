@@ -345,7 +345,8 @@ export default function SearchPage() {
     });
   }
 
-  const mapped = data?.mapped || {};
+  const parsedJson = data?.parsedJson || data?.mapped || {};
+  const mapped = parsedJson;
   const raw = data?.raw || {};
   const results = asArray(mapped?.results?.result).filter((result) => isNumericId(idForDetail(result)));
   const calls = asArray(raw?.debug?.calls);
@@ -671,6 +672,12 @@ export default function SearchPage() {
         </section>
 
         <section className="debug-section">
+          <div className="wrapper-card">
+            <div className="wrapper-card-label">Wrapper zoeken</div>
+            <h2>parsedJson = wrapperZoeken(raw)</h2>
+            <p>De zoekvisualisatie leest uit deze Aquabrowser-compatible parsed JSON. De OCLC/WISE data blijft alleen zichtbaar als controlebron.</p>
+          </div>
+
           <button type="button" className="tab-button" onClick={downloadCsv}>
             Download mapping CSV
           </button>
@@ -694,9 +701,9 @@ export default function SearchPage() {
           </details>
 
           <details className="debug-block">
-            <summary>Mapped output</summary>
+            <summary>Parsed JSON (Aquabrowser-compatible wrapper)</summary>
             <div className="debug-content">
-              <pre>{pretty(mapped)}</pre>
+              <pre>{pretty(parsedJson)}</pre>
             </div>
           </details>
 
