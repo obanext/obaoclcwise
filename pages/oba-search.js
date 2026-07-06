@@ -36,7 +36,7 @@ function idForDetail(result = {}) {
     return decodeURIComponent(detailPage.replace("/oba-detail/", ""));
   }
 
-  return text(result?.id?._text || result?.id?._attributes?.nativeid);
+  return text(result?.id?._attributes?.nativeid);
 }
 
 function resultTitle(result = {}) {
@@ -347,13 +347,15 @@ export default function SearchPage() {
 
   const mapped = data?.mapped || {};
   const raw = data?.raw || {};
-  const allOclc = raw?.allOclc || {
-    perspectiveResponse: asArray(raw?.debug?.calls)[0]?.body || null,
-    titlesummaryResponse: raw?.searchResponse || null,
-    debug: raw?.debug || { calls: [] },
-  };
   const results = asArray(mapped?.results?.result).filter((result) => isNumericId(idForDetail(result)));
   const calls = asArray(raw?.debug?.calls);
+  const allOclc = {
+    perspectiveResponse: calls[0]?.body || {},
+    titlesummaryResponse: raw?.searchResponse || calls[1]?.body || {},
+    debug: {
+      calls,
+    },
+  };
   const perspectives = asArray(raw?.perspectives);
 
   const selectedPerspective =

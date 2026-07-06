@@ -138,7 +138,6 @@ export default async function handler(req, res) {
     searchScope = DEFAULT_SCOPE,
     facetFilter = [],
     filterAvailableTitles = "false",
-    sort = "",
   } = req.query;
 
   const query = String(q || "").trim();
@@ -170,14 +169,9 @@ export default async function handler(req, res) {
       perspectives,
       selectedPerspectiveId: String(perspectiveId || DEFAULT_PERSPECTIVE_ID),
       selectedSearchScope: String(searchScope || DEFAULT_SCOPE),
-      selectedSort: text(sort),
+      selectedSort: "",
       selectedFacetFilters: asArray(facetFilter),
       searchResponse: {},
-      allOclc: {
-        perspectiveResponse: perspectiveCall.body,
-        titlesummaryResponse: {},
-        debug: { calls: [perspectiveCall] },
-      },
       resolvedItems: [],
       debug: {
         calls: [perspectiveCall],
@@ -200,7 +194,6 @@ export default async function handler(req, res) {
     `&filterAvailableTitles=${encodeURIComponent(filterAvailableTitles)}` +
     `&enableMultiSelectFaceting=true`;
 
-  titleSummaryUrl = appendParam(titleSummaryUrl, "sort", sort);
   titleSummaryUrl = appendRepeatedParam(titleSummaryUrl, "facetFilter", facetFilter);
 
   const searchCall = await fetchSafe(titleSummaryUrl);
@@ -221,14 +214,9 @@ export default async function handler(req, res) {
     perspectives,
     selectedPerspectiveId: String(perspectiveId || DEFAULT_PERSPECTIVE_ID),
     selectedSearchScope: String(searchScope || DEFAULT_SCOPE),
-    selectedSort: text(sort),
+    selectedSort: "",
     selectedFacetFilters: asArray(facetFilter),
     searchResponse: searchCall.body,
-    allOclc: {
-      perspectiveResponse: perspectiveCall.body,
-      titlesummaryResponse: searchCall.body,
-      debug: { calls: [perspectiveCall, searchCall] },
-    },
     resolvedItems: searchItems.map((item) => ({
       sourceId: extractSourceId(item),
       childTitleId: extractChildTitleId(item),

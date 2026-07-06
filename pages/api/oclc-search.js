@@ -433,8 +433,11 @@ export default async function handler(req, res) {
     );
   }
 
+  const useSearchEndpoint = selectedTermFilters.length > 0;
   let searchUrl =
-    `${BASE}/branch/${encodeURIComponent(BRANCH_ID)}/perspective/${encodeURIComponent(selectedPerspectiveId)}/titlesummary` +
+    `${BASE}/branch/${encodeURIComponent(BRANCH_ID)}/perspective/${encodeURIComponent(selectedPerspectiveId)}/${
+      useSearchEndpoint ? "search" : "titlesummary"
+    }` +
     `?returnType=default` +
     `&offset=${offset}` +
     `&limit=${limitNumber}` +
@@ -442,11 +445,10 @@ export default async function handler(req, res) {
     `&filterAvailableTitles=${encodeURIComponent(selectedFilterAvailableTitles ? "true" : "false")}` +
     `&enableMultiSelectFaceting=true`;
 
-  if (query && query !== "*.*") {
+  if (query && !(useSearchEndpoint && query === "*.*")) {
     searchUrl = appendParam(searchUrl, "term", query);
   }
 
-  searchUrl = appendParam(searchUrl, "sort", selectedSort);
   searchUrl = appendRepeatedParam(searchUrl, "facetFilter", selectedFacetFilters);
   searchUrl = appendRepeatedParam(searchUrl, "termFilter", selectedTermFilters);
 
