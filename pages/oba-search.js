@@ -714,19 +714,6 @@ export default function SearchPage() {
             </div>
           </details>
 
-          <details className="debug-block">
-            <summary>Mockup raw wrapper</summary>
-            <div className="debug-content">
-              <pre>{pretty(raw)}</pre>
-            </div>
-          </details>
-
-          <details className="debug-block">
-            <summary>Mapping rows</summary>
-            <div className="debug-content">
-              <pre>{pretty(csvRows)}</pre>
-            </div>
-          </details>
         </section>
       </div>
     </div>
