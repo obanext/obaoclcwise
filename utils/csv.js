@@ -1,9 +1,14 @@
 export function toDetailMappingCsv(rows) {
   const headers = [
     "OBA detailpagina",
-    "raw json parsed veld",
+    "raw XML ABL pad",
+    "raw JSON GB pad",
     "OCLC endpoint",
-    "OCLC veld",
+    "OCLC veldpad",
+    "mapped JSON pad",
+    "transformatie",
+    "status",
+    "opmerking",
     "OCLC waarde",
   ];
 
@@ -17,9 +22,14 @@ export function toDetailMappingCsv(rows) {
     ...rows.map((row) =>
       [
         row.label,
-        row.jsonPath,
-        row.endpoint,
+        row.rawXmlPath,
+        row.rawJsonPath,
+        row.oclcEndpoint,
         row.oclcField,
+        row.mappedPath,
+        row.transformation,
+        row.status,
+        row.note,
         row.oclcValue,
       ].map(escape).join(",")
     ),

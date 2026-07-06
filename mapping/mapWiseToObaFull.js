@@ -6,7 +6,7 @@ const text = (value) => {
   return String(value).trim();
 };
 
-const first = (...values) => values.find((value) => text(value)) || "";
+const firstText = (...values) => values.map(text).find(Boolean) || "";
 
 // Tijdelijke pre-migratie selectie: Amstelland testbibliotheek.
 const ALLOWED_BRANCHES = ["1000", "1001", "1002", "1003", "1004"];
@@ -18,22 +18,18 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
   const author = title.author || {};
   const collaborators = asArray(title.collaborators);
   const subjects = asArray(title.subjects);
+  const genres = asArray(title.genre);
   const isbn = asArray(title.isbn).map(text).filter(Boolean);
   const ppn = asArray(title.ppn).map(text).filter(Boolean);
-  const genre = asArray(title.genre)[0] || {};
   const language = asArray(title.language)[0] || {};
   const series = asArray(title.titleSeries)[0] || {};
   const collation = parseCollation(title.annotationCollation);
-  const imprint = parseImprint(title.imprint, title.publicationYear);
+  const imprint = parseImprint(title.imprint);
   const authorName = parseName(author.description);
-  const materialRaw = mediaRaw(title.media?.code, title.media?.description);
-  const targetAudience = targetAudienceFromTitle(title);
-  const nbd = extractLid(titleRecord.momkeys) || extractNbd(title.libraryRecommendation);
-  const bookCode = buildBookCode(title, authorName.lastName);
-  const formattedAuthor = formatDisplayAuthor(authorName, author.description);
-  const secondaryStatement = buildSecondaryResponsibility(collaborators);
+  const nbd = extractLid(titleRecord.momkeys) || extractLid(title.imageUrls?.medium) || extractLid(title.imageUrls?.large);
+  const bookCode = firstItemValue(itemInformation, "callNumber") || firstItemValue(itemInformation, "headWord") || firstLocalCallNumber(title);
 
-  return {
+  const output = {
     _attributes: {
       version: "",
       "before-rendering-time": "",
@@ -57,15 +53,7 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
       _text: text(title.id),
     },
 
-    frabl: {
-      _attributes: {
-        translation: "FRBR Nummer (FRABL)",
-        "search-method": "frabl",
-        "search-term": text(title.frbrkey || title.frbrKey),
-        "search-type": "searcher",
-      },
-      _text: text(title.frbrkey || title.frbrKey),
-    },
+    frabl: buildFrabl(title),
 
     "detail-page": {
       _text: "",
@@ -94,121 +82,40 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
       },
     },
 
-    authors: {
-      "main-author": {
-        _attributes: {
-          "search-method": "author",
-          "search-term": formattedAuthor,
-          "search-type": "searcher",
-          translation: "Auteur (hoofd)",
-          firstname: authorName.firstName,
-          lastname: authorName.lastName,
-          preposition: authorName.preposition,
-          type: text(author.addition),
-          "localized-type": localizedRole(author.addition),
-          creatortype: author.type === "AUTHOR" ? "person" : "unknown",
-          main: "true",
-        },
-        _text: formattedAuthor,
-      },
-      author: collaborators.map((collaborator) => ({
-        _attributes: {
-          "search-method": "author",
-          "search-term": formatDisplayAuthor(parseName(collaborator.description), collaborator.description),
-          "search-type": "searcher",
-          translation: "Auteur",
-          type: text(collaborator.addition),
-          "localized-type": localizedRole(collaborator.addition),
-          creatortype: collaborator.type === "AUTHOR" ? "person" : "unknown",
-        },
-        _text: formatDisplayAuthor(parseName(collaborator.description), collaborator.description),
-      })),
-    },
+    authors: buildAuthors(author, authorName, collaborators),
 
     formats: {
       format: {
         _attributes: {
           translation: "Formaat",
           "search-method": "format",
-          "search-term": materialRaw,
+          "search-term": text(title.media?.code || title.media?.description),
           "search-type": "searcher",
-          raw: materialRaw,
+          raw: text(title.media?.code),
         },
         _text: text(title.media?.description),
       },
     },
 
-    identifiers: {
-      "isbn-id": isbn.map((value) => ({
-        _attributes: {
-          "search-method": "isbn",
-          "search-term": value.startsWith("=") ? value : `=${value}`,
-          "search-type": "searcher",
-          translation: "ISBN",
-        },
-        _text: value.startsWith("=") ? value : `=${value}`,
-      })),
-      "normalized-isbn-id": isbn.map((value) => ({
-        _attributes: { translation: "ISBN (genormaliseerd)" },
-        _text: value.replace(/^=/, ""),
-      })),
-      "ppn-id": {
-        _attributes: {
-          "search-method": "ppn",
-          "search-term": text(ppn[0] || titleRecord.ppn),
-          "search-type": "precise",
-          translation: "PICA productienummer",
-        },
-        _text: text(ppn[0] || titleRecord.ppn),
-      },
-    },
+    identifiers: buildIdentifiers(isbn, ppn, titleRecord),
 
-    publication: {
-      year: {
-        _attributes: {
-          translation: "Publicatiejaar",
-          "search-method": "year",
-          "search-term": text(title.publicationYear || titleRecord.publicationYear || imprint.year),
-          "search-type": "searcher",
-        },
-        _text: text(title.publicationYear || titleRecord.publicationYear || imprint.year),
-      },
-      publishers: {
-        publisher: {
-          _attributes: {
-            translation: "Uitgever",
-            "search-method": "publisher",
-            "search-term": imprint.publisher,
-            "search-type": "searcher",
-            year: text(title.publicationYear || titleRecord.publicationYear || imprint.year),
-            place: imprint.place,
-          },
-          _text: imprint.publisher,
-        },
-      },
-      editions: {
-        edition: {
-          _attributes: { translation: "Editie" },
-          _text: text(title.annotationEdition || asArray(availability)[0]?.edition),
-        },
-      },
-    },
+    publication: buildPublication(title, titleRecord, imprint),
 
     languages: {
       language: {
         _attributes: {
           translation: "Taal",
           "search-method": "language",
-          "search-term": text(language.code).toLowerCase(),
+          "search-term": text(language.code),
           "search-type": "searcher",
-          raw: text(language.code).toLowerCase(),
+          raw: text(language.code),
         },
         _text: text(language.description),
       },
     },
 
     subjects: {
-      "topical-subject": subjects.map((subject) => ({
+      "topical-subject": repeatable(subjects.map((subject) => ({
         _attributes: {
           translation: "Onderwerp",
           "search-method": "subject",
@@ -216,20 +123,10 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
           "search-type": "fuzzy,precise",
         },
         _text: text(subject.description),
-      })),
+      }))),
     },
 
-    genres: {
-      genre: {
-        _attributes: {
-          translation: "Genre",
-          "search-method": "genre",
-          "search-term": text(genre.description),
-          "search-type": "searcher",
-        },
-        _text: text(genre.description),
-      },
-    },
+    genres: buildGenres(genres),
 
     description: {
       pages: {
@@ -249,31 +146,7 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
       },
     },
 
-    "target-audiences": {
-      "target-audience": {
-        _attributes: {
-          translation: "Doelgroep",
-          "search-method": "targetaudience",
-          "search-term": targetAudience.searchTerm,
-          "search-type": "searcher",
-          raw: targetAudience.raw,
-        },
-        _text: targetAudience.text,
-      },
-    },
-
-    series: {
-      "series-title": {
-        _attributes: {
-          translation: "In de reeks",
-          "search-method": "series",
-          "search-term": text(series.description),
-          "search-type": "searcher",
-          volume: text(series.addition || series.number),
-        },
-        _text: text(series.description),
-      },
-    },
+    "target-audiences": buildTargetAudiences(title),
 
     ratings: {},
 
@@ -282,22 +155,20 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
       info: {
         _attributes: {
           "import-time": "",
-          material: buildInfoMaterial(title),
-          language: text(language.code).toLowerCase(),
+          material: text(title.media?.code),
+          language: text(language.code),
           debug: "",
         },
       },
       record: {
-        "undup-info": buildUndupInfo(title, formattedAuthor),
         marc: buildMarc({
           title,
           titleRecord,
           author,
           authorName,
-          formattedAuthor,
           collaborators,
           subjects,
-          genre,
+          genres,
           language,
           series,
           isbn,
@@ -306,7 +177,6 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
           collation,
           nbd,
           bookCode,
-          secondaryStatement,
         }),
         meta: {
           branches: buildBranches(itemInformation),
@@ -314,27 +184,226 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
       },
     },
 
-    "undup-info": buildUndupInfo(title, formattedAuthor),
+    "undup-info": buildUndupInfo(),
 
     custom: {},
     branches: buildTopBranches(itemInformation),
     services: {},
   };
+
+  output["librarian-info"].record["undup-info"] = buildUndupInfo();
+
+  if (hasSeries(series)) {
+    output.series = buildSeries(series);
+  }
+
+  return output;
 }
 
-function buildUndupInfo(title = {}, formattedAuthor = "") {
+function repeatable(items) {
+  const filtered = asArray(items).filter(hasTextDeep);
+  if (filtered.length === 1) return filtered[0];
+  return filtered;
+}
+
+function hasTextDeep(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value !== "object") return Boolean(text(value));
+  if (Array.isArray(value)) return value.some(hasTextDeep);
+  return Object.values(value).some(hasTextDeep);
+}
+
+function buildFrabl(title = {}) {
   const frabl = text(title.frbrkey || title.frbrKey);
   return {
     _attributes: {
+      translation: "FRBR Nummer (FRABL)",
+      "search-method": frabl ? "frabl" : "",
+      "search-term": frabl,
+      "search-type": frabl ? "searcher" : "",
+    },
+    _text: frabl,
+  };
+}
+
+function buildAuthors(author = {}, authorName = {}, collaborators = []) {
+  const result = {
+    "main-author": {
+      _attributes: {
+        "search-method": "author",
+        "search-term": text(author.description),
+        "search-type": "searcher",
+        translation: "Auteur (hoofd)",
+        firstname: authorName.firstName,
+        lastname: authorName.lastName,
+        preposition: authorName.preposition,
+        type: text(author.addition),
+        "localized-type": "",
+        creatortype: text(author.type),
+        main: "true",
+      },
+      _text: text(author.description),
+    },
+  };
+
+  const secondary = collaborators.map((collaborator) => ({
+    _attributes: {
+      "search-method": "author",
+      "search-term": text(collaborator.description),
+      "search-type": "searcher",
+      translation: "Auteur",
+      type: text(collaborator.addition),
+      "localized-type": "",
+      creatortype: text(collaborator.type),
+    },
+    _text: text(collaborator.description),
+  })).filter((item) => item._text);
+
+  if (secondary.length) result.author = repeatable(secondary);
+
+  return result;
+}
+
+function buildIdentifiers(isbn = [], ppn = [], titleRecord = {}) {
+  const result = {};
+
+  const isbnNodes = isbn.map((value) => ({
+    _attributes: {
+      "search-method": "isbn",
+      "search-term": value.startsWith("=") ? value : `=${value}`,
+      "search-type": "searcher",
+      translation: "ISBN",
+    },
+    _text: value.startsWith("=") ? value : `=${value}`,
+  }));
+
+  if (isbnNodes.length) {
+    result["isbn-id"] = repeatable(isbnNodes);
+    result["normalized-isbn-id"] = repeatable(isbn.map((value) => ({
+      _attributes: { translation: "ISBN (genormaliseerd)" },
+      _text: value.replace(/^=/, ""),
+    })));
+  }
+
+  const ppnValue = text(ppn[0] || titleRecord.ppn);
+  if (ppnValue) {
+    result["ppn-id"] = {
+      _attributes: {
+        "search-method": "ppn",
+        "search-term": ppnValue,
+        "search-type": "precise",
+        translation: "PICA productienummer",
+      },
+      _text: ppnValue,
+    };
+  }
+
+  return result;
+}
+
+function buildPublication(title = {}, titleRecord = {}, imprint = {}) {
+  const year = text(title.publicationYear || titleRecord.publicationYear || imprint.year);
+  const result = {
+    year: {
+      _attributes: {
+        translation: "Publicatiejaar",
+        "search-method": "year",
+        "search-term": year,
+        "search-type": "searcher",
+      },
+      _text: year,
+    },
+    publishers: {
+      publisher: {
+        _attributes: {
+          translation: "Uitgever",
+          "search-method": "publisher",
+          "search-term": imprint.publisher,
+          "search-type": "searcher",
+          year,
+          place: imprint.place,
+        },
+        _text: imprint.publisher,
+      },
+    },
+  };
+
+  const edition = text(title.annotationEdition);
+  if (edition) {
+    result.editions = {
+      edition: {
+        _attributes: { translation: "Editie" },
+        _text: edition,
+      },
+    };
+  }
+
+  return result;
+}
+
+function buildGenres(genres = []) {
+  const nodes = genres.map((genre) => ({
+    _attributes: {
+      translation: "Genre",
+      "search-method": "genre",
+      "search-term": text(genre.description),
+      "search-type": "searcher",
+    },
+    _text: text(genre.description),
+  })).filter((item) => item._text);
+
+  return { genre: repeatable(nodes) };
+}
+
+function buildTargetAudiences(title = {}) {
+  const description = text(title.audience?.description);
+  const code = text(title.audience?.code);
+
+  return {
+    "target-audience": {
+      _attributes: {
+        translation: "Doelgroep",
+        "search-method": "targetaudience",
+        "search-term": code,
+        "search-type": "searcher",
+        raw: code,
+      },
+      _text: description,
+    },
+  };
+}
+
+function hasSeries(series = {}) {
+  return Boolean(text(series.description || series.addition || series.number));
+}
+
+function buildSeries(series = {}) {
+  return {
+    "series-title": {
+      _attributes: {
+        translation: "In de reeks",
+        "search-method": "series",
+        "search-term": text(series.description),
+        "search-type": "searcher",
+        volume: text(series.addition || series.number),
+      },
+      _text: text(series.description),
+    },
+  };
+}
+
+function buildUndupInfo() {
+  return {
+    _attributes: {
       key: "",
-      cnt: "0",
-      sort: "year",
-      frabl,
-      "frabl-global-count": "1",
-      "frabl-key1": text(title.title || title.mainTitle).toLowerCase(),
-      "frabl-key2": text(formattedAuthor).toLowerCase(),
+      cnt: "",
+      sort: "",
+      frabl: "",
+      "frabl-global-count": "",
+      "frabl-key1": "",
+      "frabl-key2": "",
       translation: "Informatie over dubbele items",
-      "undup-all-search": frabl ? `frabl=0x${frabl}MFFFFFF` : "",
+      "undup-all-search": "",
     },
   };
 }
@@ -344,10 +413,9 @@ function buildMarc({
   titleRecord,
   author,
   authorName,
-  formattedAuthor,
   collaborators,
   subjects,
-  genre,
+  genres,
   language,
   series,
   isbn,
@@ -356,73 +424,94 @@ function buildMarc({
   collation,
   nbd,
   bookCode,
-  secondaryStatement,
 }) {
-  return {
-    _attributes: { src: "v" },
-    df010: isbn.map((value) => ({ df010: marcNode("a", value.startsWith("=") ? value : `=${value}`) })),
-    df020: { df020: marcNode("b", text(ppn[0] || titleRecord.ppn)) },
-    df059: { df059: marcNode("j", bookCode) },
-    df101: { df101: marcNode("a", publicationLanguage(language)) },
-    df200: {
-      df200: [
-        marcNode("a", text(title.mainTitle || title.title)),
-        marcNode("b", buildMaterial(title)),
-        marcNode("f", formattedAuthor),
-        marcNode("g", secondaryStatement),
-      ],
-    },
-    df210: {
-      df210: [
-        marcNode("a", imprint.place),
-        marcNode("c", imprint.publisher),
-        marcNode("d", text(title.publicationYear || titleRecord.publicationYear || imprint.year)),
-      ],
-    },
-    df215: {
-      df215: [
-        marcNode("a", collation.pages),
-        marcNode("c", collation.illustrations),
-        marcNode("d", collation.size),
-        marcNode("e", collation.attachment),
-      ],
-    },
-    df520: {
+  const marc = { _attributes: { src: "v" } };
+
+  const df010 = isbn.map((value) => ({ df010: marcNode("a", value.startsWith("=") ? value : `=${value}`) }));
+  if (df010.length) marc.df010 = repeatable(df010);
+
+  const ppnValue = text(ppn[0] || titleRecord.ppn);
+  if (ppnValue) marc.df020 = { df020: marcNode("b", ppnValue) };
+  if (bookCode) marc.df059 = { df059: marcNode("j", bookCode) };
+
+  const languagePublication = publicationLanguage(language);
+  if (languagePublication) marc.df101 = { df101: marcNode("a", languagePublication) };
+
+  const df200 = [
+    marcNode("a", text(title.mainTitle || title.title)),
+    marcNode("b", text(title.media?.description)),
+    marcNode("f", text(author.description)),
+    marcNode("g", collaborators.map((item) => text(item.description)).filter(Boolean).join(", ")),
+  ].filter((node) => node._text);
+  if (df200.length) marc.df200 = { df200 };
+
+  const df210 = [
+    marcNode("a", imprint.place),
+    marcNode("c", imprint.publisher),
+    marcNode("d", text(title.publicationYear || titleRecord.publicationYear || imprint.year)),
+  ].filter((node) => node._text);
+  if (df210.length) marc.df210 = { df210 };
+
+  const df215 = [
+    marcNode("a", collation.pages),
+    marcNode("c", collation.illustrations),
+    marcNode("d", collation.size),
+    marcNode("e", collation.attachment),
+  ].filter((node) => node._text);
+  if (df215.length) marc.df215 = { df215 };
+
+  if (hasSeries(series)) {
+    marc.df520 = {
       df520: [
         marcNode("a", text(series.description)),
         marcNode("v", text(series.addition || series.number)),
-      ],
-    },
-    df700: {
-      df700: [
-        marcNode("4", text(author.addition)),
-        marcNode("a", authorName.lastName),
-        marcNode("b", authorName.firstNameWithPreposition),
-        marcNode("z", localizedRole(author.addition)),
-        marcNode("ab", text(author.description)),
-        marcNode("ap", "-1"),
-      ],
-    },
-    df630: subjects.map((subject) => ({ df630: marcNode("a", text(subject.description)) })),
-    df691: { df691: marcNode("a", text(genre.description).toLowerCase()) },
-    df702: collaborators.map((collaborator) => {
-      const name = parseName(collaborator.description);
-      return {
-        df702: [
-          marcNode("4", text(collaborator.addition)),
-          marcNode("a", name.lastName),
-          marcNode("b", name.firstNameWithPreposition),
-          marcNode("z", localizedRole(collaborator.addition)),
-          marcNode("ab", text(collaborator.description)),
-          marcNode("ap", "-1"),
-        ],
-      };
-    }),
-    df014: { df014: marcNode("a", nbd) },
-    df320: { df320: marcNode("a", text(title.contents || titleRecord.description)) },
-    df044: { df044: marcNode("a", prodCountry(title)) },
-    df205: { df205: marcNode("a", text(title.annotationEdition)) },
-  };
+      ].filter((node) => node._text),
+    };
+  }
+
+  const df700 = [
+    marcNode("4", text(author.addition)),
+    marcNode("a", authorName.lastName),
+    marcNode("b", authorName.firstNameWithPreposition),
+    marcNode("z", ""),
+    marcNode("ab", text(author.description)),
+    marcNode("ap", ""),
+  ].filter((node) => node._text);
+  if (df700.length) marc.df700 = { df700 };
+
+  const df630 = subjects.map((subject) => ({ df630: marcNode("a", text(subject.description)) }));
+  if (df630.length) marc.df630 = repeatable(df630);
+
+  const df691 = genres.map((genre) => ({ df691: marcNode("a", text(genre.description)) }));
+  if (df691.length) marc.df691 = repeatable(df691);
+
+  const df702 = collaborators.map((collaborator) => {
+    const name = parseName(collaborator.description);
+    const nodes = [
+      marcNode("4", text(collaborator.addition)),
+      marcNode("a", name.lastName),
+      marcNode("b", name.firstNameWithPreposition),
+      marcNode("z", ""),
+      marcNode("ab", text(collaborator.description)),
+      marcNode("ap", ""),
+    ].filter((node) => node._text);
+
+    return nodes.length ? { df702: nodes } : null;
+  }).filter(Boolean);
+  if (df702.length) marc.df702 = repeatable(df702);
+
+  if (nbd) marc.df014 = { df014: marcNode("a", nbd) };
+
+  const summary = text(title.contents || titleRecord.description);
+  if (summary) marc.df320 = { df320: marcNode("a", summary) };
+
+  const edition = text(title.annotationEdition);
+  if (edition) marc.df205 = { df205: marcNode("a", edition) };
+
+  // df044 bestaat in het GB-contract, maar er is geen direct OCLC-veld voor productieland.
+  marc.df044 = { df044: marcNode("a", "") };
+
+  return marc;
 }
 
 function marcNode(key, value) {
@@ -464,35 +553,14 @@ function splitFirstNamePreposition(value = "") {
   return { firstName: text(match[1]), preposition: text(match[2]) };
 }
 
-function formatDisplayAuthor(name, fallback = "") {
-  if (!text(fallback)) return "";
-  if (text(fallback).includes(",")) {
-    const suffix = [name.preposition, name.lastName].filter(Boolean).join(" ");
-    return [name.firstName, suffix].filter(Boolean).join(" ");
-  }
-  return text(fallback);
-}
-
-function buildSecondaryResponsibility(collaborators = []) {
-  const illustrators = asArray(collaborators).filter((item) => text(item.addition) === "ill");
-  if (illustrators.length) {
-    return `tekeningen ${illustrators.map((item) => formatDisplayAuthor(parseName(item.description), item.description)).filter(Boolean).join(" en ")}`;
-  }
-
-  return asArray(collaborators)
-    .map((item) => formatDisplayAuthor(parseName(item.description), item.description))
-    .filter(Boolean)
-    .join(", ");
-}
-
-function parseImprint(imprint = "", fallbackYear = "") {
+function parseImprint(imprint = "") {
   const source = text(imprint);
   const [place = "", rest = ""] = source.split(":");
-  const yearMatch = rest.match(/(\d{4})/);
+  const yearMatch = rest.match(/[©\[\(]?(\d{4})[\]\)]?/);
   return {
     place: text(place),
     publisher: text(rest.replace(/,?\s*[©\[\(]?\d{4}[\]\)]?.*$/, "")),
-    year: text(yearMatch?.[1] || fallbackYear),
+    year: text(yearMatch?.[1]),
   };
 }
 
@@ -515,102 +583,48 @@ function normalizeCollation(value = "") {
   return text(value).replace(/\s+:\s+/g, ": ").replace(/\s+;\s+/g, " ; ").replace(/\s+\+\s+/g, " + ");
 }
 
-function buildBookCode(title, authorLastName) {
-  const explicit = text(asArray(title.localCallNumbers)[0]?.description || asArray(title.localCallNumbers)[0]);
-  if (explicit) return explicit;
-
-  const callNumber = text(title.signature?.[0]?.description || title.readingLevel || title.targetGroup);
-  if (callNumber && authorLastName) return `${callNumber}-${authorLastName}`;
-  if (authorLastName) return `A-${authorLastName.toLowerCase()}`;
-  return "";
-}
-
-function buildMaterial(title) {
-  const category = text(title.titleCategory || title.youthMaterial?.code);
-  const media = text(title.media?.description);
-  if (!category && !media) return "";
-  return `${category} [${media}]`.trim();
-}
-
-function buildInfoMaterial(title) {
-  const raw = mediaRaw(title.media?.code, title.media?.description);
-  if (!raw) return "";
-  return raw === "book" ? "booNormalBook;matBook" : raw;
-}
-
 function publicationLanguage(language = {}) {
-  const code = text(language.code).toLowerCase();
+  const code = text(language.code);
   const description = text(language.description);
   if (code && description) return `${code} [${description}]`;
   return description || code;
 }
 
-function mediaRaw(code = "", description = "") {
-  const normalizedCode = text(code).toUpperCase();
-  const normalizedDescription = text(description).toLowerCase();
-  if (normalizedCode === "BOE" || normalizedDescription === "boek") return "book";
-  return normalizedCode.toLowerCase() || normalizedDescription;
+function extractLid(value = "") {
+  return text(value).match(/(?:^|[;?&])lid=([^;&]+)/)?.[1] || "";
 }
 
-function localizedRole(role = "") {
-  switch (text(role)) {
-    case "aut": return "Auteur";
-    case "ill": return "Illustrator";
-    case "trl": return "Vertaler";
-    case "edt": return "Redacteur";
-    default: return text(role);
-  }
+function firstLocalCallNumber(title = {}) {
+  const value = asArray(title.localCallNumbers)[0];
+  if (!value) return "";
+  return text(value.description || value.callNumber || value);
 }
 
-function targetAudienceFromTitle(title = {}) {
-  if (title.youth) {
-    return { text: "Jeugd", searchTerm: "ageYouth", raw: "ageYouth" };
-  }
-  if (title.adult) {
-    return { text: "Volwassenen", searchTerm: "ageAdult", raw: "ageAdult" };
-  }
-  return { text: text(title.audience?.description), searchTerm: text(title.audience?.code), raw: text(title.audience?.code) };
-}
-
-function extractLid(momkeys = "") {
-  return text(momkeys).match(/(?:^|;)lid=([^;]+)/)?.[1] || "";
-}
-
-function extractNbd(value = "") {
-  return text(value).match(/\b\d{10}\b/)?.[0] || "";
-}
-
-function prodCountry(title = {}) {
-  const source = text(title.source).toLowerCase();
-  if (source === "nbd") return "ne";
-  return "";
+function firstItemValue(items = [], field) {
+  return text(asArray(items).find((item) => text(item?.[field]))?.[field]);
 }
 
 function buildBranches(items = []) {
   return asArray(items)
     .filter((item) => ALLOWED_BRANCHES.includes(String(item.branchId)))
     .map((item) => {
-      const branchArea = text(item.branchArea || item.branchId);
+      const branchArea = text(item.branchId);
       const shelfCode = text(item.shelfCode || item.location);
       const callNumber = text(item.callNumber || item.headWord);
       const location = text(item.subLocation || item.shelfDescription || item.location);
-      const returnDate = formatReturnDate(item.returnDate);
       const p = [
         text(item.barcode || item.id),
-        "REGIONRD",
         text(item.branchId),
+        text(item.branchName),
         shelfCode,
         callNumber,
         location,
-        returnDate || "-",
-        "-",
-        "-",
-        "-",
+        text(item.returnDate),
+        text(item.effectiveStatus),
+        text(item.effectiveStatusCode),
+        text(item.material),
         text(item.location),
-        "",
-        "",
-        "",
-        "",
+        text(item.itemCreationDate),
       ].join("^");
 
       return {
@@ -621,7 +635,7 @@ function buildBranches(items = []) {
           branchNode("m", callNumber),
           branchNode("k", location),
           branchNode("a", branchArea),
-          branchNode("rss", normalizeDate(item.itemCreationDate)),
+          branchNode("rss", text(item.itemCreationDate)),
         ],
       };
     });
@@ -634,31 +648,21 @@ function branchNode(key, value) {
   };
 }
 
-function formatReturnDate(value = "") {
-  const source = text(value);
-  const match = source.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return "";
-  return `${match[3]}/${match[2]}/${match[1]}`;
-}
-
-function normalizeDate(value = "") {
-  return text(value).replaceAll("-", "");
-}
-
 function buildTopBranches(items = []) {
   const branchNames = new Map();
   asArray(items)
     .filter((item) => ALLOWED_BRANCHES.includes(String(item.branchId)))
     .forEach((item) => {
+      const id = text(item.branchId);
       const name = text(item.branchName || item.branchId);
-      if (name) branchNames.set(name, item.branchId);
+      if (id || name) branchNames.set(id || name, name || id);
     });
 
   return [
     {
-      branch: Array.from(branchNames.entries()).map(([name, id]) => ({
+      branch: Array.from(branchNames.entries()).map(([id, name]) => ({
         _attributes: {
-          id: `/root/OBA/${id}`,
+          id,
           translation: name,
         },
       })),
