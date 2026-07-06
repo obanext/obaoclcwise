@@ -117,7 +117,7 @@ export default async function handler(req, res) {
   }
 
   let url =
-    `${BASE}/branch/${BRANCH_ID}/perspective/${encodeURIComponent(perspectiveId)}/search` +
+    `${BASE}/branch/${BRANCH_ID}/perspective/${encodeURIComponent(perspectiveId)}/titlesummary` +
     `?returnType=default` +
     `&offset=${offset}` +
     `&limit=${limitNumber}` +

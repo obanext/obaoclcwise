@@ -7,6 +7,11 @@ const text = (value) => {
 };
 
 const first = (...values) => values.find((value) => text(value)) || "";
+const singleOrArray = (items) => {
+  const values = asArray(items).filter(Boolean);
+  if (values.length === 0) return [];
+  return values.length === 1 ? values[0] : values;
+};
 
 function isNumericId(value) {
   return /^\d+$/.test(text(value));
@@ -45,23 +50,21 @@ function coverImage(title = {}) {
 }
 
 function normalizeFormat(title = {}) {
-  const media = text(title.media?.description);
-  const raw = text(title.media?.icon).toLowerCase();
+  const mediaText = text(title.media?.description);
+  const mediaCode = text(title.media?.code);
 
-  if (!media && !raw) return [];
+  if (!mediaText && !mediaCode) return [];
 
-  return [
-    {
-      _attributes: {
-        translation: "Formaat",
-        "search-method": "format",
-        "search-term": raw,
-        "search-type": "searcher",
-        raw,
-      },
-      _text: media,
+  return {
+    _attributes: {
+      translation: "Formaat",
+      "search-method": "format",
+      "search-term": mediaCode,
+      "search-type": "searcher",
+      raw: mediaCode,
     },
-  ];
+    _text: mediaText,
+  };
 }
 
 function normalizeSubjects(title = {}) {
@@ -83,6 +86,67 @@ function normalizeSubjects(title = {}) {
     }));
 }
 
+function normalizeGenres(title = {}) {
+  const genres = asArray(title.genre)
+    .map((genre) => ({
+      _attributes: {
+        translation: "Genre",
+        "search-method": "genre",
+        "search-term": text(genre?.description || genre),
+        "search-type": "searcher",
+      },
+      _text: text(genre?.description || genre),
+    }))
+    .filter((genre) => genre._text);
+
+  if (!genres.length) return undefined;
+
+  return {
+    genre: singleOrArray(genres),
+  };
+}
+
+function normalizeIdentifiers(title = {}) {
+  const isbnItems = asArray(title.isbn)
+    .map(text)
+    .filter(Boolean)
+    .map((isbn) => ({
+      _attributes: {
+        "search-method": "isbn",
+        "search-term": isbn,
+        "search-type": "searcher",
+        translation: "ISBN",
+      },
+      _text: isbn,
+    }));
+
+  const normalizedIsbnItems = asArray(title.isbn)
+    .map(text)
+    .filter(Boolean)
+    .map((isbn) => ({
+      _attributes: {
+        translation: "ISBN (genormaliseerd)",
+      },
+      _text: isbn,
+    }));
+
+  const ppn = text(asArray(title.ppn)[0]);
+
+  return {
+    "isbn-id": singleOrArray(isbnItems),
+    "normalized-isbn-id": singleOrArray(normalizedIsbnItems),
+    "ppn-id": {
+      _attributes: {
+        "search-method": "ppn",
+        "search-term": ppn,
+        "search-type": "precise",
+        translation: "PICA productienummer",
+      },
+      _text: ppn,
+    },
+  };
+}
+
 function normalizeResult(entry = {}) {
   const detailId = getDetailId(entry);
   if (!detailId) return null;
@@ -91,24 +155,22 @@ function normalizeResult(entry = {}) {
   const sourceId = text(entry.sourceId || title.frbrkey || title.id);
   const authorName = text(title.author?.description || title.author);
   const authorParts = splitName(authorName);
-  const isbn = text(asArray(title.isbn)[0]);
-  const ppn = text(asArray(title.ppn)[0]);
   const language = asArray(title.language)[0] || {};
-  const formats = normalizeFormat(title);
+  const format = normalizeFormat(title);
   const subjects = normalizeSubjects(title);
+  const genres = normalizeGenres(title);
 
-  return {
+  const result = {
     id: {
       _attributes: {
-        nativeid: detailId,
-        sourceid: sourceId,
-        ds: "library/v/OBA",
+        nativeid: "",
+        ds: "",
         translation: "ID",
-        "search-method": "id",
-        "search-term": `|oba-catalogus|${detailId}`,
-        "search-type": "precise",
+        "search-method": "",
+        "search-term": "",
+        "search-type": "",
       },
-      _text: `|oba-catalogus|${detailId}`,
+      _text: detailId,
     },
 
     "detail-page": {
@@ -152,14 +214,14 @@ function normalizeResult(entry = {}) {
           firstname: authorParts.first,
           lastname: authorParts.last,
           creatortype: authorName ? "person" : "",
-          main: "true",
+          main: authorName ? "true" : "",
         },
         _text: authorName,
       },
     },
 
     formats: {
-      format: formats,
+      format,
     },
 
     publication: {
@@ -225,7 +287,7 @@ function normalizeResult(entry = {}) {
     },
 
     subjects: {
-      "topical-subject": subjects,
+      "topical-subject": singleOrArray(subjects),
     },
 
     "target-audiences": {
@@ -233,44 +295,29 @@ function normalizeResult(entry = {}) {
         _attributes: {
           translation: "Doelgroep",
           "search-method": "targetaudience",
-          "search-term": text(title.audience?.code),
+          "search-term": "",
           "search-type": "searcher",
-          raw: text(title.audience?.code),
+          raw: "",
         },
-        _text: text(title.audience?.description),
+        _text: "",
       },
     },
 
-    identifiers: {
-      "isbn-id": {
-        _attributes: {
-          "search-method": "isbn",
-          "search-term": isbn,
-          "search-type": "searcher",
-          translation: "ISBN",
-        },
-        _text: isbn,
+    frabl: {
+      _attributes: {
+        translation: "FRBR Nummer (FRABL)",
+        "search-method": "frabl",
+        "search-term": sourceId,
+        "search-type": "searcher",
       },
-      "normalized-isbn-id": {
-        _attributes: {
-          translation: "ISBN (genormaliseerd)",
-        },
-        _text: isbn,
-      },
-      "ppn-id": {
-        _attributes: {
-          "search-method": "ppn",
-          "search-term": ppn,
-          "search-type": "precise",
-          translation: "PICA productienummer",
-        },
-        _text: ppn,
-      },
+      _text: sourceId,
     },
+
+    identifiers: normalizeIdentifiers(title),
 
     "undup-info": {
       _attributes: {
-        key: `|oba-catalogus|${detailId}`,
+        key: "",
         cnt: "",
         sort: "year",
         frabl: sourceId,
@@ -284,6 +331,10 @@ function normalizeResult(entry = {}) {
 
     custom: {},
   };
+
+  if (genres) result.genres = genres;
+
+  return result;
 }
 
 export function mapWiseSearchToObaFull(raw = {}) {
@@ -295,9 +346,10 @@ export function mapWiseSearchToObaFull(raw = {}) {
 
   return {
     _attributes: {
-      version: "1",
+      version: "",
+      "before-rendering-time": "",
+      "total-time": "",
       "detail-level": "Default",
-      source: "oclc-wise",
     },
 
     meta: {

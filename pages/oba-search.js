@@ -36,7 +36,7 @@ function idForDetail(result = {}) {
     return decodeURIComponent(detailPage.replace("/oba-detail/", ""));
   }
 
-  return text(result?.id?._attributes?.nativeid);
+  return text(result?.id?._text || result?.id?._attributes?.nativeid);
 }
 
 function resultTitle(result = {}) {
@@ -347,6 +347,11 @@ export default function SearchPage() {
 
   const mapped = data?.mapped || {};
   const raw = data?.raw || {};
+  const allOclc = raw?.allOclc || {
+    perspectiveResponse: asArray(raw?.debug?.calls)[0]?.body || null,
+    titlesummaryResponse: raw?.searchResponse || null,
+    debug: raw?.debug || { calls: [] },
+  };
   const results = asArray(mapped?.results?.result).filter((result) => isNumericId(idForDetail(result)));
   const calls = asArray(raw?.debug?.calls);
   const perspectives = asArray(raw?.perspectives);
@@ -676,6 +681,13 @@ export default function SearchPage() {
           </button>
 
           <details className="debug-block">
+            <summary>Alles OCLC</summary>
+            <div className="debug-content">
+              <pre>{pretty(allOclc)}</pre>
+            </div>
+          </details>
+
+          <details className="debug-block">
             <summary>OCLC API calls</summary>
             <div className="debug-content">
               {calls.length ? (
@@ -701,7 +713,7 @@ export default function SearchPage() {
           </details>
 
           <details className="debug-block">
-            <summary>Raw output</summary>
+            <summary>Mockup raw wrapper</summary>
             <div className="debug-content">
               <pre>{pretty(raw)}</pre>
             </div>
