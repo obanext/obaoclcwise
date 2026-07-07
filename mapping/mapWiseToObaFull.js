@@ -1,16 +1,22 @@
+// Normalize OCLC fields that can be singleton or array.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
+// Convert optional API values to safe contract text.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
   return String(value).trim();
 };
 
+// Return the first non-empty text value from possible OCLC source fields.
 const firstText = (...values) => values.map(text).find(Boolean) || "";
 
 // Tijdelijke pre-migratie selectie: Amstelland testbibliotheek.
 const ALLOWED_BRANCHES = ["1000", "1001", "1002", "1003", "1004"];
 
+// Public mapper for IST detail.
+// Input: OCLC detail responses.
+// Output: mapped JSON in the current OBA/GB detail contract shape.
 export function mapWiseToObaFull({ title, titleInfo, availability, itemInformation }) {
   if (!title || typeof title !== "object") return {};
 
@@ -200,12 +206,14 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
   return output;
 }
 
+// Preserve the old contract shape: one value as object, multiple values as array.
 function repeatable(items) {
   const filtered = asArray(items).filter(hasTextDeep);
   if (filtered.length === 1) return filtered[0];
   return filtered;
 }
 
+// Check whether a contract node contains any visible text.
 function hasTextDeep(value) {
   if (value === null || value === undefined) return false;
   if (typeof value !== "object") return Boolean(text(value));
@@ -213,6 +221,7 @@ function hasTextDeep(value) {
   return Object.values(value).some(hasTextDeep);
 }
 
+// Map OCLC FRBR key into the frabl contract node when present.
 function buildFrabl(title = {}) {
   const frabl = text(title.frbrkey || title.frbrKey);
   return {
@@ -226,6 +235,7 @@ function buildFrabl(title = {}) {
   };
 }
 
+// Build main and secondary author nodes from OCLC author/collaborator fields.
 function buildAuthors(author = {}, authorName = {}, collaborators = []) {
   const result = {
     "main-author": {
@@ -264,6 +274,7 @@ function buildAuthors(author = {}, authorName = {}, collaborators = []) {
   return result;
 }
 
+// Build ISBN/PPN identifier nodes from OCLC title/titleInfo fields.
 function buildIdentifiers(isbn = [], ppn = [], titleRecord = {}) {
   const result = {};
 
@@ -301,6 +312,7 @@ function buildIdentifiers(isbn = [], ppn = [], titleRecord = {}) {
   return result;
 }
 
+// Build publication contract nodes from direct year and parsed imprint values.
 function buildPublication(title = {}, titleRecord = {}, imprint = {}) {
   const year = text(title.publicationYear || titleRecord.publicationYear || imprint.year);
   const result = {
@@ -341,6 +353,7 @@ function buildPublication(title = {}, titleRecord = {}, imprint = {}) {
   return result;
 }
 
+// Build genre contract nodes from OCLC genre descriptions.
 function buildGenres(genres = []) {
   const nodes = genres.map((genre) => ({
     _attributes: {
@@ -355,6 +368,7 @@ function buildGenres(genres = []) {
   return { genre: repeatable(nodes) };
 }
 
+// Build target-audience node if OCLC audience data is available.
 function buildTargetAudiences(title = {}) {
   const description = text(title.audience?.description);
   const code = text(title.audience?.code);
@@ -373,10 +387,12 @@ function buildTargetAudiences(title = {}) {
   };
 }
 
+// Check whether the OCLC titleSeries object contains displayable data.
 function hasSeries(series = {}) {
   return Boolean(text(series.description || series.addition || series.number));
 }
 
+// Build series contract node from OCLC titleSeries.
 function buildSeries(series = {}) {
   return {
     "series-title": {
@@ -392,6 +408,7 @@ function buildSeries(series = {}) {
   };
 }
 
+// Keep the undup-info contract node empty when OCLC does not provide the old ABL undup data.
 function buildUndupInfo() {
   return {
     _attributes: {
@@ -408,6 +425,8 @@ function buildUndupInfo() {
   };
 }
 
+// Build the df/MARC compatibility block in the existing OBA detail contract.
+// Values are direct OCLC values where possible; parsed/split values must be documented in the mapping CSV.
 function buildMarc({
   title,
   titleRecord,
@@ -514,6 +533,7 @@ function buildMarc({
   return marc;
 }
 
+// Create one keyed df subfield node.
 function marcNode(key, value) {
   return {
     _attributes: { key },
@@ -521,6 +541,7 @@ function marcNode(key, value) {
   };
 }
 
+// Split an OCLC display name into the name parts expected by the old contract.
 function parseName(description = "") {
   const source = text(description);
   if (!source) {
@@ -546,6 +567,7 @@ function parseName(description = "") {
   };
 }
 
+// Separate simple Dutch name prepositions for the contract attributes.
 function splitFirstNamePreposition(value = "") {
   const source = text(value);
   const match = source.match(/^(.+?)\s+(van|de|den|der|van de|van der|van den)$/i);
@@ -553,6 +575,7 @@ function splitFirstNamePreposition(value = "") {
   return { firstName: text(match[1]), preposition: text(match[2]) };
 }
 
+// Parse OCLC imprint text into place/publisher/year for contract fields that require separate values.
 function parseImprint(imprint = "") {
   const source = text(imprint);
   const [place = "", rest = ""] = source.split(":");
@@ -564,6 +587,7 @@ function parseImprint(imprint = "") {
   };
 }
 
+// Parse OCLC annotationCollation into pages, illustrations, size and attachment.
 function parseCollation(value = "") {
   const full = normalizeCollation(value);
   const [pagesPart = "", rest = ""] = full.split(":");
@@ -579,10 +603,12 @@ function parseCollation(value = "") {
   };
 }
 
+// Normalize spacing in the collation text before splitting it.
 function normalizeCollation(value = "") {
   return text(value).replace(/\s+:\s+/g, ": ").replace(/\s+;\s+/g, " ; ").replace(/\s+\+\s+/g, " + ");
 }
 
+// Compose language code and description for the df101 contract field.
 function publicationLanguage(language = {}) {
   const code = text(language.code);
   const description = text(language.description);
@@ -590,20 +616,24 @@ function publicationLanguage(language = {}) {
   return description || code;
 }
 
+// Extract lid/order number from OCLC momkeys or image URL when available.
 function extractLid(value = "") {
   return text(value).match(/(?:^|[;?&])lid=([^;&]+)/)?.[1] || "";
 }
 
+// Fallback for book code when itemInformation has no callNumber/headWord.
 function firstLocalCallNumber(title = {}) {
   const value = asArray(title.localCallNumbers)[0];
   if (!value) return "";
   return text(value.description || value.callNumber || value);
 }
 
+// Read the first non-empty value for a field from OCLC itemInformation.
 function firstItemValue(items = [], field) {
   return text(asArray(items).find((item) => text(item?.[field]))?.[field]);
 }
 
+// Build the keyed branch/exemplar nodes required by librarian-info.record.meta.branches.
 function buildBranches(items = []) {
   return asArray(items)
     .filter((item) => ALLOWED_BRANCHES.includes(String(item.branchId)))
@@ -641,6 +671,7 @@ function buildBranches(items = []) {
     });
 }
 
+// Create one keyed branch subfield node.
 function branchNode(key, value) {
   return {
     _attributes: { key },
@@ -648,6 +679,7 @@ function branchNode(key, value) {
   };
 }
 
+// Build the top-level branches summary from OCLC itemInformation branch ids/names.
 function buildTopBranches(items = []) {
   const branchNames = new Map();
   asArray(items)
@@ -671,6 +703,7 @@ function buildTopBranches(items = []) {
   ];
 }
 
+// Translate OCLC item status for views that import this helper.
 export function mapWiseItemStatus(status) {
   switch (text(status)) {
     case "AVAILABLE": return "Aanwezig";

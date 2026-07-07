@@ -1,3 +1,4 @@
+// Convert detail mapping rows to the CSV downloaded from the detail page.
 export function toDetailMappingCsv(rows) {
   const headers = [
     "OBA detailpagina",
@@ -12,6 +13,7 @@ export function toDetailMappingCsv(rows) {
     "OCLC waarde",
   ];
 
+  // Escape one CSV cell.
   const escape = (value) => {
     const stringValue = value === null || value === undefined ? "" : String(value);
     return `"${stringValue.replace(/"/g, '""')}"`;

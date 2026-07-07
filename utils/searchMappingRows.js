@@ -1,11 +1,14 @@
+// Convert optional values to safe CSV text.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
   return String(value).trim();
 };
 
+// Normalize singleton/array values from mapped output and OCLC data.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
+// Escape one CSV cell.
 function escapeCsv(value) {
   const stringValue = text(value);
 
@@ -16,6 +19,7 @@ function escapeCsv(value) {
   return stringValue;
 }
 
+// Convert a source/mapped sample value to a compact CSV-readable string.
 function sampleValue(value) {
   if (value === null || value === undefined) return "";
 
@@ -31,25 +35,30 @@ function sampleValue(value) {
   }
 }
 
+// Use the first mapped search result as a concrete example in the mapping CSV.
 function firstResult(mapped = {}) {
   return asArray(mapped?.results?.result)[0] || {};
 }
 
+// Use the first OCLC title as a concrete source example in the mapping CSV.
 function firstOclcTitle(raw = {}) {
   return asArray(raw?.titles)[0]?.title || asArray(raw?.searchResponse?.items)[0] || {};
 }
 
+// Strip host/query from a debug URL so the CSV shows the endpoint path.
 function endpointName(url = "") {
   const value = text(url);
   if (!value) return "";
   return value.replace(/^https?:\/\/[^/]+\/restapi/, "").split("?")[0];
 }
 
+// Find one OCLC API call in the raw debug call list.
 function pickCall(raw = {}, pattern = "") {
   const calls = asArray(raw?.debug?.calls);
   return calls.find((call) => text(call?.url).includes(pattern)) || {};
 }
 
+// Build one documentation row for the search mapping CSV.
 function row({
   label,
   rawXmlPath,
@@ -78,6 +87,7 @@ function row({
   };
 }
 
+// Build the search mapping documentation rows from raw OCLC evidence and mapped output.
 export function buildSearchMappingRows(raw = {}, mapped = {}) {
   const result = firstResult(mapped);
   const title = firstOclcTitle(raw);
@@ -363,6 +373,7 @@ export function buildSearchMappingRows(raw = {}, mapped = {}) {
   ];
 }
 
+// Convert search mapping rows to a downloadable CSV.
 export function toSearchMappingCsv(rows = []) {
   const headers = [
     "OBA zoekpagina",

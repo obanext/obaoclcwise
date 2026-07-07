@@ -1,17 +1,22 @@
+// Normalize values that may be singletons or arrays in OCLC responses.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
+// Convert optional values to safe text for the OBA JSON contract.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
   return String(value).trim();
 };
 
+// Return the first non-empty value from a list of possible OCLC fields.
 const first = (...values) => values.find((value) => text(value)) || "";
 
+// Validate detail ids before they are emitted into the mapped search result.
 function isNumericId(value) {
   return /^\d+$/.test(text(value));
 }
 
+// Split an OCLC display name into firstname/lastname attributes required by the existing OBA contract.
 function splitName(value = "") {
   const source = text(value);
 
@@ -35,15 +40,18 @@ function splitName(value = "") {
   };
 }
 
+// Resolve the numeric detail id selected by the API from OCLC titlesummary data.
 function getDetailId(entry = {}) {
   const id = first(entry.resolvedDetailId, entry.id, entry.title?.id);
   return isNumericId(id) ? text(id) : "";
 }
 
+// Pick the best available cover URL from OCLC imageUrls.
 function coverImage(title = {}) {
   return first(title.imageUrls?.small, title.imageUrls?.medium, title.imageUrls?.large);
 }
 
+// Map OCLC media to the existing OBA formats.format contract node.
 function normalizeFormat(title = {}) {
   const media = text(title.media?.description);
   const raw = text(title.media?.icon).toLowerCase();
@@ -64,6 +72,7 @@ function normalizeFormat(title = {}) {
   ];
 }
 
+// Map OCLC subject-like fields to topical-subject contract nodes.
 function normalizeSubjects(title = {}) {
   return [
     ...asArray(title.subjects),
@@ -83,6 +92,7 @@ function normalizeSubjects(title = {}) {
     }));
 }
 
+// Map one OCLC search result to one results.result[] object in the current OBA search JSON contract.
 function normalizeResult(entry = {}) {
   const detailId = getDetailId(entry);
   if (!detailId) return null;
@@ -99,6 +109,8 @@ function normalizeResult(entry = {}) {
 
   return {
     id: {
+      // Technische contractvorming: de OCLC/Wise title id wordt in de oude OBA id-vorm geplaatst
+      // omdat dit searchcontract die vorm nog verwacht. De bronwaarde blijft detailId.
       _attributes: {
         nativeid: detailId,
         sourceid: sourceId,
@@ -286,6 +298,9 @@ function normalizeResult(entry = {}) {
   };
 }
 
+// Public mapper for IST search.
+// Input: internal raw object with OCLC titlesummary items.
+// Output: mapped JSON in the current OBA/GB search contract shape.
 export function mapWiseSearchToObaFull(raw = {}) {
   const titles = asArray(raw.titles).filter(
     (entry) => entry?.title && typeof entry.title === "object" && isNumericId(getDetailId(entry))

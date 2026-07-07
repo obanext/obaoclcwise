@@ -10,18 +10,22 @@ const searchHeaders = {
   wise_key: process.env.WISE_KEY,
 };
 
+// Normalize fields that may be returned by OCLC as either a single value or an array.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
+// Convert optional request/API values to safe strings.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
   return String(value).trim();
 };
 
+// Validate ids before they are used as detail-page ids.
 function isNumericId(value) {
   return /^\d+$/.test(text(value));
 }
 
+// Fetch OCLC JSON while preserving status/body for the visible API-call debug panel.
 async function fetchSafe(url, headers = searchHeaders) {
   try {
     const response = await fetch(url, { headers });
@@ -51,10 +55,13 @@ async function fetchSafe(url, headers = searchHeaders) {
   }
 }
 
+// Read perspective definitions from /clienttype/default/perspective.
 function extractPerspectives(body) {
   return asArray(body?.perspective);
 }
 
+// Read result items from the OCLC titlesummary response.
+// Multiple names are kept because WISE/OCLC responses can differ by endpoint/configuration.
 function extractSearchItems(body) {
   if (!body || typeof body !== "object") return [];
 
@@ -72,6 +79,8 @@ function extractSearchItems(body) {
   );
 }
 
+// Resolve the numeric title id used by the mockup detail page.
+// The titlesummary result often carries it in childTitleList[0].childTitleId.
 function extractChildTitleId(item) {
   const id =
     item?.childTitleList?.[0]?.childTitleId ||
@@ -83,10 +92,12 @@ function extractChildTitleId(item) {
   return isNumericId(id) ? text(id) : "";
 }
 
+// Keep the OCLC/FRBR source id for evidence/debug and mapped metadata.
 function extractSourceId(item) {
   return text(item?.id || item?.title?.id || item?.frbrkey || item?.title?.frbrkey || "");
 }
 
+// Read the total result count from the titlesummary response.
 function extractTotal(body, fallback) {
   if (!body || typeof body !== "object") return fallback;
 
@@ -102,16 +113,19 @@ function extractTotal(body, fallback) {
   );
 }
 
+// Append a query parameter without changing existing endpoint parameters.
 function appendParam(url, key, value) {
   if (value === undefined || value === null || value === "") return url;
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
 }
 
+// Append repeated query parameters such as facetFilter.
 function appendRepeatedParam(url, key, values) {
   return asArray(values).reduce((nextUrl, value) => appendParam(nextUrl, key, value), url);
 }
 
+// Convert one OCLC titlesummary item to the small raw item shape consumed by the mapper.
 function normalizeSearchItem(item) {
   const detailId = extractChildTitleId(item);
 
@@ -128,6 +142,8 @@ function normalizeSearchItem(item) {
   };
 }
 
+// IST search API.
+// Purpose: fetch OCLC perspective + titlesummary, keep raw evidence, and produce mapped OBA JSON-contract output.
 export default async function handler(req, res) {
   const {
     q = "",

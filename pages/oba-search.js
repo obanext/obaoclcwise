@@ -3,10 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { buildSearchMappingRows, toSearchMappingCsv } from "../utils/searchMappingRows";
 
+// Pretty-print JSON for the visible debug panels.
 const pretty = (value) => JSON.stringify(value, null, 2);
 
+// Normalize OCLC fields that may be returned as either a single object or an array.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
+// Convert optional API values to safe display strings.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
@@ -25,10 +28,12 @@ const DEFAULT_PERSPECTIVE_ID = "3682";
 const DEFAULT_SCOPE = "anything";
 const DEFAULT_SORT = "2910";
 
+// Check whether a value is safe to use as a Wise/OCLC detail id.
 function isNumericId(value) {
   return /^\d+$/.test(text(value));
 }
 
+// Resolve the detail id used by the visual result link.
 function idForDetail(result = {}) {
   const detailPage = text(result?.["detail-page"]?._text);
 
@@ -39,28 +44,35 @@ function idForDetail(result = {}) {
   return text(result?.id?._attributes?.nativeid);
 }
 
+// Read the title from the mapped OBA search-contract object.
 function resultTitle(result = {}) {
   return text(result?.titles?.title?._text || result?.titles?.["short-title"]?._text);
 }
 
+// Read the cover URL from the mapped OBA search-contract object.
 function coverImage(result = {}) {
   return text(result?.coverimages?.coverimage?._text);
 }
 
+// Read mapped topical subjects for optional display in the result card.
 function subjects(result = {}) {
   return asArray(result?.subjects?.["topical-subject"])
     .map((item) => text(item?._text))
     .filter(Boolean);
 }
 
+// Build a readable label for an OCLC perspective.
 function perspectiveLabel(perspective = {}) {
   return text(perspective.labelText || perspective.labelKey || perspective.id);
 }
 
+// Translate known OCLC/Wise sort option ids to short Dutch UI labels.
 function sortLabel(sort = {}) {
   return SORT_LABELS[String(sort.id)] || text(sort.labelText || sort.labelKey || sort.id);
 }
 
+// Extract facet groups for the left filter panel.
+// OCLC titlesummary uses `facets[].filterList[]`; older experiments used other names.
 function extractFacetGroups(searchResponse = {}, perspectives = [], selectedPerspectiveId = "") {
   const safeSearchResponse =
     searchResponse && typeof searchResponse === "object" ? searchResponse : {};
@@ -80,6 +92,7 @@ function extractFacetGroups(searchResponse = {}, perspectives = [], selectedPers
       const field = text(group.field || group.name || group.key || group.id || group.labelKey);
 
       const rawValues =
+        group.filterList ||
         group.values ||
         group.value ||
         group.items ||
@@ -90,13 +103,13 @@ function extractFacetGroups(searchResponse = {}, perspectives = [], selectedPers
 
       const values = asArray(rawValues)
         .map((item) => ({
-          label: text(item.labelText || item.label || item.name || item.value || item.key || item.id),
-          value: text(item.value || item.key || item.id || item.name || item.label),
+          label: text(item.labelText || item.label || item.name || item.term || item.value || item.key || item.id),
+          value: text(item.term || item.value || item.key || item.id || item.name || item.label),
           count: item.count ?? item.total ?? item.numberOfResults ?? item.hits ?? "",
           facetFilter:
             text(item.facetFilter || item.filter || item.query) ||
-            (field && text(item.value || item.key || item.id || item.name || item.label)
-              ? `${field}:${text(item.value || item.key || item.id || item.name || item.label)}`
+            (field && text(item.term || item.value || item.key || item.id || item.name || item.label)
+              ? `${field}:${text(item.term || item.value || item.key || item.id || item.name || item.label)}`
               : ""),
         }))
         .filter((item) => item.label || item.value);
@@ -120,6 +133,8 @@ function extractFacetGroups(searchResponse = {}, perspectives = [], selectedPers
     .filter((group) => group.label);
 }
 
+// IST search page.
+// Purpose: visual A/B search results plus OCLC source evidence, API calls, mapped output and CSV download.
 export default function SearchPage() {
   const router = useRouter();
 
@@ -195,6 +210,7 @@ export default function SearchPage() {
     return () => clearTimeout(timer);
   }, [query, searchScope]);
 
+  // Build the browser URL for the current search state.
   function buildUrl({
     q,
     nextPage,
@@ -218,6 +234,8 @@ export default function SearchPage() {
     return `/oba-search?${params.toString()}`;
   }
 
+  // Build the internal IST search API URL.
+  // This preserves the current UI state; endpoint behavior lives in /api/oba-search.
   function buildApiUrl({
     q,
     nextPage,
@@ -242,6 +260,7 @@ export default function SearchPage() {
     return `/api/oba-search?${params.toString()}`;
   }
 
+  // Execute a search and optionally synchronize the browser URL.
   function runSearch({
     q = query,
     nextPage = 1,
@@ -300,11 +319,13 @@ export default function SearchPage() {
       });
   }
 
+  // Submit a new text search from the search box.
   function submit(event) {
     event.preventDefault();
     runSearch({ q: query, nextPage: 1 });
   }
 
+  // Change OCLC perspective and clear active facets, because facets are perspective-specific.
   function changePerspective(nextPerspectiveId) {
     setPerspectiveId(nextPerspectiveId);
     setFacetFilters([]);
@@ -317,6 +338,7 @@ export default function SearchPage() {
     });
   }
 
+  // Change visual sort state. The current API route does not alter endpoint behavior here.
   function changeSort(nextSort) {
     setSort(nextSort);
 
@@ -327,6 +349,7 @@ export default function SearchPage() {
     });
   }
 
+  // Toggle a facetFilter value exactly as OCLC expects it, for example `branchId:1001`.
   function toggleFacet(filterValue) {
     const value = text(filterValue);
     if (!value) return;
@@ -369,6 +392,7 @@ export default function SearchPage() {
 
   const csvRows = useMemo(() => buildSearchMappingRows(raw, mapped), [raw, mapped]);
 
+  // Download the search mapping documentation as CSV.
   function downloadCsv() {
     try {
       const csv = toSearchMappingCsv(csvRows);

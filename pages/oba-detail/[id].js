@@ -3,21 +3,26 @@ import { useRouter } from "next/router";
 import { buildDetailMappingRows } from "../../utils/mappingRows";
 import { toDetailMappingCsv } from "../../utils/csv";
 
+// Pretty-print JSON for the visible debug panels.
 const pretty = (value) => JSON.stringify(value, null, 2);
 
+// Normalize OCLC/mapped values that can be returned as singleton or array.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
+// Convert optional API values to safe display strings.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
   return String(value).trim();
 };
 
+// Read a keyed branch field from the mapped librarian-info branch contract.
 const getBranchField = (branch, key) =>
   asArray(branch?.branches).find((item) => item?._attributes?.key === key)?._text || "";
 
 const ALLOWED_BRANCHES = ["1000", "1001", "1002", "1003", "1004"];
 
+// Translate OCLC item statuses to the simple Dutch labels used in the visual availability table.
 const mapStatus = (status) => {
   switch (text(status)) {
     case "AVAILABLE": return "Aanwezig";
@@ -30,6 +35,7 @@ const mapStatus = (status) => {
   }
 };
 
+// Read one MARC/df subfield from the mapped contract. Used by the specifications table.
 const getMarcSingle = (mapped, tag, key) => {
   const value = mapped?.["librarian-info"]?.record?.marc?.[tag]?.[tag];
   if (Array.isArray(value)) {
@@ -38,6 +44,7 @@ const getMarcSingle = (mapped, tag, key) => {
   return value?._attributes?.key === key ? text(value?._text) : "";
 };
 
+// Read repeating MARC/df subfields from the mapped contract.
 const getMarcRepeating = (mapped, tag, key) =>
   asArray(mapped?.["librarian-info"]?.record?.marc?.[tag])
     .map((entry) => {
@@ -49,6 +56,7 @@ const getMarcRepeating = (mapped, tag, key) =>
     })
     .filter(Boolean);
 
+// Flatten raw OCLC objects for the visible "alles oclc" evidence table.
 function flattenOclc(value, prefix = "") {
   const rows = [];
 
@@ -90,6 +98,8 @@ function flattenOclc(value, prefix = "") {
   return rows;
 }
 
+// IST detail page.
+// Purpose: visual detail A/B page plus OCLC source evidence, API calls, mapped output and CSV download.
 export default function Page() {
   const router = useRouter();
   const { id } = router.query;
@@ -226,6 +236,7 @@ export default function Page() {
 
   const csvRows = useMemo(() => buildDetailMappingRows(raw, mapped), [raw, mapped]);
 
+  // Download the detail mapping documentation as CSV.
   const downloadCsv = () => {
     try {
       const csv = toDetailMappingCsv(csvRows);

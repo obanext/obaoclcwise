@@ -1,15 +1,19 @@
+// Normalize singleton/array values for mapping examples.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
+// Convert optional values to safe mapping text.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
   return String(value).trim();
 };
 
+// Return the first non-empty source value for CSV examples.
 function firstText(...values) {
   return values.map(text).find(Boolean) || "";
 }
 
+// Split an OCLC display name into last/first parts for documented derived fields.
 function splitName(value = "") {
   const source = text(value);
   if (!source.includes(",")) {
@@ -20,6 +24,7 @@ function splitName(value = "") {
   return { last: text(last), first: text(rest.join(",")) };
 }
 
+// Split OCLC imprint text into place/publisher/year for documented derived fields.
 function splitImprint(imprint = "") {
   const source = text(imprint);
   const [place = "", rest = ""] = source.split(":");
@@ -28,6 +33,7 @@ function splitImprint(imprint = "") {
   return { place: text(place), publisher, year };
 }
 
+// Split OCLC annotationCollation into contract parts for mapping examples.
 function parseCollation(value = "") {
   const full = text(value).replace(/\s+:\s+/g, ": ").replace(/\s+;\s+/g, " ; ").replace(/\s+\+\s+/g, " + ");
   const [pages = "", rest = ""] = full.split(":");
@@ -42,6 +48,7 @@ function parseCollation(value = "") {
   };
 }
 
+// Compose language code and description for the df101 example.
 function languageValue(title = {}) {
   const lang = asArray(title.language)[0] || {};
   const code = text(lang.code);
@@ -50,6 +57,7 @@ function languageValue(title = {}) {
   return description || code;
 }
 
+// Read collaborator example values for display in the detail mapping CSV.
 function collaboratorValue(collaborators = [], field) {
   return asArray(collaborators)
     .map((item) => {
@@ -63,14 +71,17 @@ function collaboratorValue(collaborators = [], field) {
     .join(" | ");
 }
 
+// Extract lid/order number from OCLC momkeys or URLs for the df014 example.
 function extractLid(value = "") {
   return text(value).match(/(?:^|[;?&])lid=([^;&]+)/)?.[1] || "";
 }
 
+// Read the first non-empty itemInformation field for mapping examples.
 function firstItemValue(raw, field) {
   return text(asArray(raw?.itemInformation).find((item) => text(item?.[field]))?.[field]);
 }
 
+// Resolve a concrete OCLC sample value for one mapping definition.
 function rawValueByField(raw, field) {
   const title = raw?.title || {};
   const titleInfo = asArray(raw?.titleInfo)[0] || {};
@@ -144,6 +155,7 @@ function rawValueByField(raw, field) {
   }
 }
 
+// Build one static detail mapping documentation row.
 const row = ({ label, rawXmlPath, rawJsonPath, oclcEndpoint = "", oclcField = "", mappedPath, transformation = "direct", status = "direct", note = "", valueField = "" }) => ({
   label,
   rawXmlPath,
@@ -210,6 +222,7 @@ const ROWS = [
   row({ label: "Titelbeschikbaarheid/reserveren", rawXmlPath: "geen directe ABL-equivalent in mapped detailcontract", rawJsonPath: "raw.availability", oclcEndpoint: "/branch/1000/titleavailability/{id}?clientType=PUBLIC&holdsCount=true", oclcField: "availability[].status|holdAllowed|holdQueuePosition", mappedPath: "raw.availability", transformation: "direct voor debug/view", status: "viewmodel buiten mapped contract", valueField: "availability.status" }),
 ];
 
+// Build detail mapping rows with sample OCLC values from the current raw response.
 export function buildDetailMappingRows(raw) {
   return ROWS.map((definition) => ({
     ...definition,
