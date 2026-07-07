@@ -4,21 +4,21 @@ const detailOptions = [
   {
     label: "IST oba.nl detailpagina",
     description:
-      "OCLC Wise data wordt geladen in een mock-up oba.nl detailpagina met de filters en facetten as-is gedefinieerd door GB.",
+      "OCLC Wise data wordt geladen in een mock-up oba.nl detailpagina gebaseerd op GB 'bonbon met knoflooksmaak' model.",
     href: "/oba-detail/842851",
     status: "Beschikbaar",
   },
   {
     label: "ALL oba.nl detailpagina",
     description:
-      "OCLC Wise brondata wordt rechtstreeks geladen in een detailweergave, zonder mapping naar het OBA JSON-contract.",
+      "OCLC Wise brondata wordt rechtstreeks geladen in een detailweergave.",
     href: "/oclc-detail/842851",
     status: "Beschikbaar",
   },
   {
     label: "SOLL oba.nl detailpagina",
     description:
-      "OCLC Wise data wordt geladen in een mock-up oba.nl detailpagina met de filters en facetten gedefinieerd door OBA.",
+      "OCLC Wise data wordt geladen in een mock-up oba.nl SOLL.",
     status: "Nog te implementeren",
   },
 ];
@@ -27,7 +27,7 @@ const searchOptions = [
   {
     label: "IST oba.nl zoekpagina",
     description:
-      "OCLC Wise data wordt geladen in een mock-up oba.nl zoekpagina met de filters en facetten as-is gedefinieerd door GB.",
+      "OCLC Wise data wordt geladen in een mock-up oba.nl zoekpagina met de filters en facetten gebaseerd op GB 'bonbon met knoflooksmaak' model.",
     href: "/oba-search",
     status: "Beschikbaar",
   },
@@ -41,7 +41,7 @@ const searchOptions = [
   {
     label: "SOLL oba.nl zoekpagina",
     description:
-      "OCLC Wise data wordt geladen in een mock-up oba.nl zoekpagina met de filters en facetten gedefinieerd door OBA.",
+      "OCLC Wise data wordt geladen in een mock-up oba.nl SOLL.",
     status: "Nog te implementeren",
   },
   {
