@@ -125,8 +125,37 @@ function appendRepeatedParam(url, key, values) {
   return asArray(values).reduce((nextUrl, value) => appendParam(nextUrl, key, value), url);
 }
 
-// Convert one OCLC titlesummary item to the small raw item shape consumed by the mapper.
-function normalizeSearchItem(item) {
+// Merge the search summary with the matching discovery-title response.
+// Search-specific fields remain available when the detail response omits them.
+function mergeTitleData(summary = {}, discovery = {}) {
+  const hasArrayValues = (value) => Array.isArray(value) && value.length > 0;
+
+  return {
+    ...discovery,
+    ...summary,
+    imageUrls: { ...(discovery.imageUrls || {}), ...(summary.imageUrls || {}) },
+    author: summary.author || discovery.author,
+    media: summary.media || discovery.media,
+    language: hasArrayValues(summary.language) ? summary.language : discovery.language,
+    isbn: hasArrayValues(summary.isbn) ? summary.isbn : discovery.isbn,
+    ppn: hasArrayValues(discovery.ppn) ? discovery.ppn : summary.ppn,
+    genre: hasArrayValues(summary.genre) ? summary.genre : discovery.genre,
+    subjects: hasArrayValues(discovery.subjects) ? discovery.subjects : summary.subjects,
+    collaborators: hasArrayValues(discovery.collaborators)
+      ? discovery.collaborators
+      : summary.collaborators,
+    childTitleList: hasArrayValues(summary.childTitleList)
+      ? summary.childTitleList
+      : discovery.childTitleList,
+    titleSeries: hasArrayValues(discovery.titleSeries)
+      ? discovery.titleSeries
+      : summary.titleSeries,
+  };
+}
+
+// Convert one OCLC titlesummary item and its discovery-title response
+// to the source shape consumed by the search mapper.
+function normalizeSearchItem(item, discoveryTitle = {}) {
   const detailId = extractChildTitleId(item);
 
   if (!detailId) return null;
@@ -135,15 +164,17 @@ function normalizeSearchItem(item) {
     id: detailId,
     sourceId: extractSourceId(item),
     resolvedDetailId: detailId,
+    titleSummary: item,
+    discoveryTitle,
     title: {
-      ...item,
+      ...mergeTitleData(item, discoveryTitle),
       id: detailId,
     },
   };
 }
 
 // IST search API.
-// Purpose: fetch OCLC perspective + titlesummary, keep raw evidence, and produce mapped OBA JSON-contract output.
+// Purpose: fetch perspective, titlesummary and discovery-title evidence, then produce mapped OBA JSON-contract output.
 export default async function handler(req, res) {
   const {
     q = "",
@@ -214,8 +245,24 @@ export default async function handler(req, res) {
 
   const searchCall = await fetchSafe(titleSummaryUrl);
   const searchItems = extractSearchItems(searchCall.body);
+  const baseTitles = searchItems.map((item) => normalizeSearchItem(item)).filter(Boolean);
+  const uniqueIds = [...new Set(baseTitles.map((entry) => entry.id).filter(isNumericId))];
 
-  const titles = searchItems.map(normalizeSearchItem).filter(Boolean);
+  // Enrich only the visible result page. These calls add bibliographic fields
+  // that are not part of titlesummary, such as imprint, collation, PPN and subjects.
+  const discoveryCalls = await Promise.all(
+    uniqueIds.map((id) => fetchSafe(`${BASE}/discovery/title/${encodeURIComponent(id)}`))
+  );
+  const discoveryById = new Map(
+    discoveryCalls.map((call, index) => [uniqueIds[index], call?.body || {}])
+  );
+
+  const titles = searchItems
+    .map((item) => {
+      const detailId = extractChildTitleId(item);
+      return normalizeSearchItem(item, discoveryById.get(detailId) || {});
+    })
+    .filter(Boolean);
   const ids = titles.map((entry) => entry.id).filter(isNumericId);
   const total = extractTotal(searchCall.body, ids.length);
 
@@ -233,6 +280,12 @@ export default async function handler(req, res) {
     selectedSort: "",
     selectedFacetFilters: asArray(facetFilter),
     searchResponse: searchCall.body,
+    discoveryTitleResponses: discoveryCalls.map((call, index) => ({
+      id: uniqueIds[index],
+      url: call.url,
+      status: call.status,
+      body: call.body,
+    })),
     resolvedItems: searchItems.map((item) => ({
       sourceId: extractSourceId(item),
       childTitleId: extractChildTitleId(item),
@@ -240,7 +293,7 @@ export default async function handler(req, res) {
       usable: isNumericId(extractChildTitleId(item)),
     })),
     debug: {
-      calls: [perspectiveCall, searchCall],
+      calls: [perspectiveCall, searchCall, ...discoveryCalls],
     },
   };
 

@@ -1,6 +1,6 @@
 # OCLC Wise → OBA mockup
 
-Deze mockup is een tijdelijke testinstallatie. Het doel is niet om een nieuw definitief datamodel te bouwen en ook niet om oude OBA/ABL-inhoud na te maken.
+Deze mockup is een tijdelijke testinstallatie voor bronbewijs, contractmapping en visuele A/B-tests met OCLC-data.
 
 De installatie heeft drie functies:
 
@@ -16,6 +16,8 @@ De installatie heeft drie functies:
 ## Actieve IST-hoofdstromen
 
 ### IST search
+
+De zoekresultaatpagina gebruikt `titlesummary` voor ranking, totaal, paginering en facetten. Voor de maximaal twintig zichtbare resultaten wordt `/discovery/title/{id}` gebruikt om aanvullende contractvelden zoals uitgever, collatie, PPN, onderwerpen, reeks en doelgroep te vullen.
 
 Bestanden:
 
@@ -77,11 +79,11 @@ De CSV gebruikt uitsluitend deze statussen:
 - `afgeleid`: de waarde wordt berekend, gesplitst of samengesteld uit één of meer OCLC/requestwaarden.
 - `na`: de gebruikte OCLC-response bevat geen bruikbare bronwaarde voor dit contractveld. Er wordt niets verzonnen.
 
-Een veld dat zowel in OCLC als in het huidige OBA JSON-contract bestaat, moet worden gemapt en mag niet als eindstatus `niet gemapt` houden.
+Een veld dat zowel in OCLC als in het huidige OBA JSON-contract bestaat, wordt gemapt.
 
 ## Belangrijke regel
 
-Oude OBA/ABL-waarden worden niet nagemaakt. OCLC-waarden worden alleen op de bestaande OBA JSON-contractpaden geplaatst. Afleidingen worden expliciet als `afgeleid` gedocumenteerd.
+OCLC-waarden worden op de bestaande OBA JSON-contractpaden geplaatst. Afleidingen worden expliciet als `afgeleid` gedocumenteerd.
 
 ## Nog apart te beoordelen testpagina's
 

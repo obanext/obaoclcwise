@@ -408,7 +408,7 @@ function buildSeries(series = {}) {
   };
 }
 
-// Build undup-info from available OCLC grouping fields without creating old OBA ids or URLs.
+// Build undup-info from available OCLC grouping fields.
 function buildUndupInfo(title = {}, author = {}) {
   const frbr = text(title.frbrkey || title.frbrKey);
   const children = asArray(title.childTitleList);

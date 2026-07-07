@@ -5,7 +5,7 @@ const text = (value) => {
   return String(value).trim();
 };
 
-// Normalize singleton/array values from mapped output and OCLC data.
+// Normalize singleton/array values from OCLC and mapped output.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
 // Check whether a source value is present.
@@ -20,21 +20,14 @@ function hasValue(value) {
 // Escape one CSV cell.
 function escapeCsv(value) {
   const stringValue = text(value);
-
-  if (/[",\n\r;]/.test(stringValue)) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-
+  if (/[",\n\r;]/.test(stringValue)) return `"${stringValue.replace(/"/g, '""')}"`;
   return stringValue;
 }
 
-// Convert a source/mapped sample value to a compact CSV-readable string.
+// Convert a sample value to compact CSV text.
 function sampleValue(value) {
   if (value === null || value === undefined) return "";
-
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return text(value);
-  }
+  if (["string", "number", "boolean"].includes(typeof value)) return text(value);
 
   try {
     const json = JSON.stringify(value);
@@ -44,41 +37,56 @@ function sampleValue(value) {
   }
 }
 
-// Strip host/query from a debug URL so the CSV shows the endpoint path.
+// Strip host and query parameters from a debug URL.
 function endpointName(url = "") {
   const value = text(url);
   if (!value) return "";
   return value.replace(/^https?:\/\/[^/]+\/restapi/, "").split("?")[0];
 }
 
-// Find one OCLC API call in the raw debug call list.
+// Find one OCLC call in the debug call list.
 function pickCall(raw = {}, pattern = "") {
-  const calls = asArray(raw?.debug?.calls);
-  return calls.find((call) => text(call?.url).includes(pattern)) || {};
+  return asArray(raw?.debug?.calls).find((call) => text(call?.url).includes(pattern)) || {};
 }
 
-// Return direct when the source exists, otherwise na.
+// Split imprint into the contract values used for place and publisher.
+function parseImprint(value = "") {
+  const source = text(value);
+  if (!source) return { place: "", publisher: "", year: "" };
+
+  const [placePart = "", ...restParts] = source.split(":");
+  const remainder = text(restParts.join(":"));
+  const year = remainder.match(/[©\[\(]?(\d{4})[\]\)]?/)?.[1] || "";
+  const publisher = text(remainder.replace(/,?\s*[©\[\(]?\d{4}[\]\)]?.*$/, ""));
+
+  return { place: text(placePart), publisher, year };
+}
+
+// Return direct when a source exists, otherwise na.
 function directStatus(value) {
   return hasValue(value) ? "direct" : "na";
 }
 
-// Return afgeleid when the source exists, otherwise na.
+// Return afgeleid when source data exists, otherwise na.
 function derivedStatus(value) {
   return hasValue(value) ? "afgeleid" : "na";
 }
 
-// Resolve the OCLC audience evidence used by the mapper.
-function audienceEvidence(title = {}) {
+// Resolve direct or derived audience evidence.
+function audienceEvidence(title = {}, summary = {}) {
   const direct = title.audience || title.targetGroup;
   if (hasValue(direct)) return { value: direct, status: "direct" };
 
-  const flags = { youth: title.youth, adult: title.adult };
-  if (title.youth === true || title.adult === true) return { value: flags, status: "afgeleid" };
+  const youth = title.youth ?? summary.youth;
+  const adult = title.adult ?? summary.adult;
+  if (youth === true || adult === true) {
+    return { value: { youth, adult }, status: "afgeleid" };
+  }
 
   return { value: "", status: "na" };
 }
 
-// Build one documentation row for the search mapping CSV.
+// Build one documentation row.
 function row({
   resultIndex = "",
   label,
@@ -89,7 +97,7 @@ function row({
   mappedPath,
   transformation,
   status,
-  note,
+  note = "",
   oclcValue,
   mappedValue,
 }) {
@@ -109,7 +117,7 @@ function row({
   };
 }
 
-// Build the rows that apply once to the complete search response.
+// Build rows that apply once to the complete search response.
 function buildGeneralRows(raw, mapped, perspectiveEndpoint, titlesummaryEndpoint) {
   const perspectiveCall = pickCall(raw, "/clienttype/default/perspective");
 
@@ -123,7 +131,6 @@ function buildGeneralRows(raw, mapped, perspectiveEndpoint, titlesummaryEndpoint
       mappedPath: "meta.count._text",
       transformation: "waarde in _text geplaatst",
       status: directStatus(raw?.searchResponse?.total),
-      note: "Aantal uit de OCLC titlesummary-response.",
       oclcValue: raw?.searchResponse?.total,
       mappedValue: mapped?.meta?.count?._text,
     }),
@@ -132,11 +139,10 @@ function buildGeneralRows(raw, mapped, perspectiveEndpoint, titlesummaryEndpoint
       rawXmlPath: "aquabrowser.meta.page",
       rawJsonPath: "meta.page._text",
       endpoint: titlesummaryEndpoint,
-      oclcPath: "request offset / limit",
+      oclcPath: "request offset + limit",
       mappedPath: "meta.page._text",
-      transformation: "paginanummer berekend uit de request",
+      transformation: "paginanummer berekend uit offset en limit",
       status: "afgeleid",
-      note: "Pagina staat niet als apart veld in de OCLC-response.",
       oclcValue: { offset: raw?.searchResponse?.offset, limit: raw?.searchResponse?.limit },
       mappedValue: mapped?.meta?.page?._text,
     }),
@@ -149,7 +155,6 @@ function buildGeneralRows(raw, mapped, perspectiveEndpoint, titlesummaryEndpoint
       mappedPath: "meta.query._text",
       transformation: "waarde in _text geplaatst",
       status: directStatus(raw?.query),
-      note: "Zoekterm uit de mockup-request.",
       oclcValue: raw?.query,
       mappedValue: mapped?.meta?.query?._text,
     }),
@@ -160,31 +165,42 @@ function buildGeneralRows(raw, mapped, perspectiveEndpoint, titlesummaryEndpoint
       endpoint: perspectiveEndpoint,
       oclcPath: "perspective[].searchScopes[] / perspective[].sortings[]",
       mappedPath: "UI zoekopties",
-      transformation: "rechtstreeks gebruikt door de UI",
+      transformation: "waarden gebruikt door de zoekinterface",
       status: directStatus(perspectiveCall?.body?.perspective),
-      note: "Geen result-contractveld; wel bron voor de zoekinterface.",
+      note: "Bron voor zoekdomeinen en sorteeropties.",
       oclcValue: perspectiveCall?.body?.perspective?.[0],
       mappedValue: raw?.perspectives?.[0],
     }),
   ];
 }
 
-// Build all field rows for one result on the current result page.
-function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
-  const title = entry?.title || {};
-  const detailId = entry?.resolvedDetailId || entry?.id || title?.id;
-  const sourceId = entry?.sourceId || title?.frbrkey || title?.frbrKey;
-  const language = asArray(title?.language)[0];
-  const publisher = title?.publisher || title?.publicationDetails || title?.imprint;
-  const summary = title?.contents || title?.contentsSchoolWise || title?.summary;
-  const genres = asArray(title?.genre).map((item) => item?.description).filter(Boolean);
-  const subjects = title?.subjects || title?.subjectSchoolWise || title?.subjectPim;
-  const isbn = asArray(title?.isbn)[0];
-  const ppn = asArray(title?.ppn)[0];
-  const collation = title?.annotationCollation;
-  const edition = title?.edition || title?.annotationEdition;
-  const series = asArray(title?.titleSeries)[0];
-  const audience = audienceEvidence(title);
+// Build all mapping rows for one visible search result.
+function buildResultRows(entry = {}, result = {}, resultIndex, endpoints) {
+  const summary = entry?.titleSummary || {};
+  const discovery = entry?.discoveryTitle || {};
+  const merged = entry?.title || {};
+  const detailId = entry?.resolvedDetailId || entry?.id || merged?.id;
+  const sourceId = entry?.sourceId || summary?.id || summary?.frbrkey || merged?.frbrkey;
+  const summaryLanguage = asArray(summary?.language)[0] || {};
+  const discoveryLanguage = asArray(discovery?.language)[0] || {};
+  const language = hasValue(discoveryLanguage) ? discoveryLanguage : summaryLanguage;
+  const imprint = parseImprint(discovery?.imprint);
+  const publisher = discovery?.publisher || discovery?.publicationDetails || imprint.publisher;
+  const place = discovery?.publicationPlace || imprint.place;
+  const edition = discovery?.annotationEdition || summary?.edition;
+  const collation = discovery?.annotationCollation;
+  const summaryText = summary?.contents || summary?.contentsSchoolWise || discovery?.contents;
+  const genres = asArray(summary?.genre?.length ? summary.genre : discovery?.genre)
+    .map((item) => item?.description || item)
+    .filter(Boolean);
+  const subjects = asArray(discovery?.subjects).map((item) => item?.description || item).filter(Boolean);
+  const series = asArray(discovery?.titleSeries)[0] || {};
+  const audience = audienceEvidence(discovery, summary);
+  const isbn = asArray(summary?.isbn?.length ? summary.isbn : discovery?.isbn)[0];
+  const ppn = asArray(discovery?.ppn)[0];
+  const variants = asArray(discovery?.titleVariant);
+  const originals = asArray(discovery?.titleOriginalTitle);
+  const collaborators = asArray(discovery?.collaborators);
 
   return [
     row({
@@ -192,12 +208,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].id",
       rawXmlPath: "aquabrowser.results.result.id",
       rawJsonPath: "results.result[].id",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].childTitleList[0].childTitleId",
       mappedPath: "results.result[].id",
       transformation: "waarde in id._text en id._attributes geplaatst",
       status: directStatus(detailId),
-      note: "De OCLC/Wise detail-id blijft ongewijzigd; er wordt geen oude OBA-id opgebouwd.",
       oclcValue: detailId,
       mappedValue: result?.id,
     }),
@@ -206,12 +221,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].detail-page",
       rawXmlPath: "aquabrowser.results.result.detail-page",
       rawJsonPath: "results.result[].detail-page._text",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].childTitleList[0].childTitleId",
       mappedPath: "results.result[].detail-page._text",
-      transformation: "interne mockup-link opgebouwd uit de detail-id",
+      transformation: "interne link opgebouwd uit de detail-id",
       status: derivedStatus(detailId),
-      note: "Interne link naar /oba-detail/{id}.",
       oclcValue: detailId,
       mappedValue: result?.["detail-page"]?._text,
     }),
@@ -220,13 +234,12 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].coverimages.coverimage",
       rawXmlPath: "aquabrowser.results.result.coverimages.coverimage",
       rawJsonPath: "results.result[].coverimages.coverimage._text",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].imageUrls.small",
       mappedPath: "results.result[].coverimages.coverimage._text",
       transformation: "waarde in _text geplaatst",
-      status: directStatus(title?.imageUrls?.small),
-      note: "Kleine cover-URL uit OCLC.",
-      oclcValue: title?.imageUrls?.small,
+      status: directStatus(summary?.imageUrls?.small || discovery?.imageUrls?.small),
+      oclcValue: summary?.imageUrls?.small || discovery?.imageUrls?.small,
       mappedValue: result?.coverimages?.coverimage?._text,
     }),
     row({
@@ -234,13 +247,12 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].titles.title",
       rawXmlPath: "aquabrowser.results.result.titles.title",
       rawJsonPath: "results.result[].titles.title._text",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].title / items[].mainTitle",
       mappedPath: "results.result[].titles.title._text",
-      transformation: "eerste aanwezige titelveld rechtstreeks gebruikt",
-      status: directStatus(title?.title || title?.mainTitle),
-      note: "Fallback verandert de bronwaarde niet.",
-      oclcValue: title?.title || title?.mainTitle,
+      transformation: "eerste aanwezige titelveld in _text geplaatst",
+      status: directStatus(summary?.title || summary?.mainTitle),
+      oclcValue: summary?.title || summary?.mainTitle,
       mappedValue: result?.titles?.title?._text,
     }),
     row({
@@ -248,41 +260,90 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].titles.short-title",
       rawXmlPath: "aquabrowser.results.result.titles.short-title",
       rawJsonPath: "results.result[].titles.short-title._text",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].mainTitle / items[].title",
       mappedPath: "results.result[].titles.short-title._text",
-      transformation: "eerste aanwezige titelveld rechtstreeks gebruikt",
-      status: directStatus(title?.mainTitle || title?.title),
-      note: "mainTitle met fallback op title.",
-      oclcValue: title?.mainTitle || title?.title,
+      transformation: "eerste aanwezige titelveld in _text geplaatst",
+      status: directStatus(summary?.mainTitle || summary?.title),
+      oclcValue: summary?.mainTitle || summary?.title,
       mappedValue: result?.titles?.["short-title"]?._text,
+    }),
+    row({
+      resultIndex,
+      label: "results.result[].titles.other-title",
+      rawXmlPath: "aquabrowser.results.result.titles.other-title",
+      rawJsonPath: "results.result[].titles.other-title",
+      endpoint: endpoints.discovery,
+      oclcPath: "titleVariant[]",
+      mappedPath: "results.result[].titles.other-title",
+      transformation: "iedere titelvariant in een titelobject geplaatst",
+      status: directStatus(variants),
+      oclcValue: variants,
+      mappedValue: result?.titles?.["other-title"],
+    }),
+    row({
+      resultIndex,
+      label: "results.result[].titles.origin-title",
+      rawXmlPath: "aquabrowser.results.result.titles.origin-title",
+      rawJsonPath: "results.result[].titles.origin-title",
+      endpoint: endpoints.discovery,
+      oclcPath: "titleOriginalTitle[]",
+      mappedPath: "results.result[].titles.origin-title",
+      transformation: "iedere oorspronkelijke titel in een titelobject geplaatst",
+      status: directStatus(originals),
+      oclcValue: originals,
+      mappedValue: result?.titles?.["origin-title"],
     }),
     row({
       resultIndex,
       label: "results.result[].authors.main-author",
       rawXmlPath: "aquabrowser.results.result.authors.main-author",
-      rawJsonPath: "results.result[].authors.main-author",
-      endpoint,
+      rawJsonPath: "results.result[].authors.main-author._text",
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].author.description",
-      mappedPath: "results.result[].authors.main-author",
-      transformation: "naamtekst direct; firstname/lastname uit naamtekst gesplitst",
-      status: derivedStatus(title?.author?.description),
-      note: "De zichtbare naam blijft de OCLC-waarde.",
-      oclcValue: title?.author?.description,
-      mappedValue: result?.authors?.["main-author"],
+      mappedPath: "results.result[].authors.main-author._text",
+      transformation: "waarde in _text geplaatst",
+      status: directStatus(summary?.author?.description || discovery?.author?.description),
+      oclcValue: summary?.author?.description || discovery?.author?.description,
+      mappedValue: result?.authors?.["main-author"]?._text,
+    }),
+    row({
+      resultIndex,
+      label: "results.result[].authors.main-author._attributes",
+      rawXmlPath: "aquabrowser.results.result.authors.main-author/@firstname|@lastname|@type",
+      rawJsonPath: "results.result[].authors.main-author._attributes",
+      endpoint: endpoints.discovery,
+      oclcPath: "author.description / author.addition / author.type",
+      mappedPath: "results.result[].authors.main-author._attributes",
+      transformation: "naam opgesplitst en rolvelden geplaatst",
+      status: derivedStatus(discovery?.author || summary?.author),
+      oclcValue: discovery?.author || summary?.author,
+      mappedValue: result?.authors?.["main-author"]?._attributes,
+    }),
+    row({
+      resultIndex,
+      label: "results.result[].authors.author",
+      rawXmlPath: "aquabrowser.results.result.authors.author",
+      rawJsonPath: "results.result[].authors.author",
+      endpoint: endpoints.discovery,
+      oclcPath: "collaborators[]",
+      mappedPath: "results.result[].authors.author",
+      transformation: "iedere bijdrager in een auteur-object geplaatst",
+      status: directStatus(collaborators),
+      oclcValue: collaborators,
+      mappedValue: result?.authors?.author,
     }),
     row({
       resultIndex,
       label: "results.result[].formats.format",
       rawXmlPath: "aquabrowser.results.result.formats.format",
       rawJsonPath: "results.result[].formats.format",
-      endpoint,
-      oclcPath: "items[].media.code / items[].media.description",
+      endpoint: endpoints.titlesummary,
+      oclcPath: "items[].media",
       mappedPath: "results.result[].formats.format",
-      transformation: "waarden in format-object geplaatst",
-      status: directStatus(title?.media),
-      note: "OCLC media.code en media.description blijven ongewijzigd.",
-      oclcValue: title?.media,
+      transformation: "mediawaarden in format-object geplaatst",
+      status: directStatus(summary?.media || discovery?.media),
+      oclcValue: summary?.media || discovery?.media,
       mappedValue: result?.formats?.format,
     }),
     row({
@@ -290,13 +351,12 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].publication.year",
       rawXmlPath: "aquabrowser.results.result.publication.year",
       rawJsonPath: "results.result[].publication.year._text",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].publicationYear",
       mappedPath: "results.result[].publication.year._text",
       transformation: "waarde in _text geplaatst",
-      status: directStatus(title?.publicationYear),
-      note: "Publicatiejaar uit OCLC titlesummary.",
-      oclcValue: title?.publicationYear,
+      status: directStatus(summary?.publicationYear || discovery?.publicationYear),
+      oclcValue: summary?.publicationYear || discovery?.publicationYear,
       mappedValue: result?.publication?.year?._text,
     }),
     row({
@@ -304,26 +364,37 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].publication.publishers.publisher",
       rawXmlPath: "aquabrowser.results.result.publication.publishers.publisher",
       rawJsonPath: "results.result[].publication.publishers.publisher._text",
-      endpoint,
-      oclcPath: "items[].publisher / items[].publicationDetails / items[].imprint",
+      endpoint: endpoints.discovery,
+      oclcPath: "imprint",
       mappedPath: "results.result[].publication.publishers.publisher._text",
-      transformation: "eerste aanwezige uitgeverveld rechtstreeks gebruikt",
-      status: directStatus(publisher),
-      note: "na wanneer titlesummary geen uitgever levert.",
-      oclcValue: publisher,
+      transformation: "uitgever uit imprint gesplitst",
+      status: derivedStatus(discovery?.imprint || discovery?.publisher),
+      oclcValue: discovery?.imprint || discovery?.publisher,
       mappedValue: result?.publication?.publishers?.publisher?._text,
+    }),
+    row({
+      resultIndex,
+      label: "results.result[].publication.publishers.publisher._attributes.place",
+      rawXmlPath: "aquabrowser.results.result.publication.publishers.publisher/@place",
+      rawJsonPath: "results.result[].publication.publishers.publisher._attributes.place",
+      endpoint: endpoints.discovery,
+      oclcPath: "imprint",
+      mappedPath: "results.result[].publication.publishers.publisher._attributes.place",
+      transformation: "plaats uit imprint gesplitst",
+      status: derivedStatus(discovery?.imprint || place),
+      oclcValue: discovery?.imprint || place,
+      mappedValue: result?.publication?.publishers?.publisher?._attributes?.place,
     }),
     row({
       resultIndex,
       label: "results.result[].publication.editions.edition",
       rawXmlPath: "aquabrowser.results.result.publication.editions.edition",
       rawJsonPath: "results.result[].publication.editions.edition._text",
-      endpoint,
-      oclcPath: "items[].edition / items[].annotationEdition",
+      endpoint: `${endpoints.discovery} | ${endpoints.titlesummary}`,
+      oclcPath: "annotationEdition / items[].edition",
       mappedPath: "results.result[].publication.editions.edition._text",
-      transformation: "waarde in _text geplaatst",
+      transformation: "eerste aanwezige editiewaarde in _text geplaatst",
       status: directStatus(edition),
-      note: "Editie wordt gemapt wanneer titlesummary deze levert.",
       oclcValue: edition,
       mappedValue: result?.publication?.editions?.edition?._text,
     }),
@@ -332,12 +403,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].languages.language",
       rawXmlPath: "aquabrowser.results.result.languages.language",
       rawJsonPath: "results.result[].languages.language",
-      endpoint,
-      oclcPath: "items[].language[0].description / items[].language[0].code",
+      endpoint: endpoints.discovery,
+      oclcPath: "language[0]",
       mappedPath: "results.result[].languages.language",
-      transformation: "waarden in language-object geplaatst",
+      transformation: "taalwaarden in language-object geplaatst",
       status: directStatus(language),
-      note: "OCLC taalcode blijft in originele vorm staan.",
       oclcValue: language,
       mappedValue: result?.languages?.language,
     }),
@@ -346,12 +416,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].description.pages",
       rawXmlPath: "aquabrowser.results.result.description.pages",
       rawJsonPath: "results.result[].description.pages._text",
-      endpoint,
-      oclcPath: "items[].annotationCollation",
+      endpoint: endpoints.discovery,
+      oclcPath: "annotationCollation",
       mappedPath: "results.result[].description.pages._text",
       transformation: "paginadeel uit annotationCollation gesplitst",
       status: derivedStatus(collation),
-      note: "na wanneer titlesummary geen collatie levert.",
       oclcValue: collation,
       mappedValue: result?.description?.pages?._text,
     }),
@@ -360,12 +429,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].description.physical-description",
       rawXmlPath: "aquabrowser.results.result.description.physical-description",
       rawJsonPath: "results.result[].description.physical-description._text",
-      endpoint,
-      oclcPath: "items[].annotationCollation",
+      endpoint: endpoints.discovery,
+      oclcPath: "annotationCollation",
       mappedPath: "results.result[].description.physical-description._text",
       transformation: "waarde in _text geplaatst",
       status: directStatus(collation),
-      note: "Volledige collatietekst uit OCLC.",
       oclcValue: collation,
       mappedValue: result?.description?.["physical-description"]?._text,
     }),
@@ -374,13 +442,12 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].summaries.summary",
       rawXmlPath: "aquabrowser.results.result.summaries.summary",
       rawJsonPath: "results.result[].summaries.summary._text",
-      endpoint,
-      oclcPath: "items[].contents / items[].contentsSchoolWise / items[].summary",
+      endpoint: endpoints.titlesummary,
+      oclcPath: "items[].contents / items[].contentsSchoolWise",
       mappedPath: "results.result[].summaries.summary._text",
-      transformation: "eerste aanwezige samenvattingsveld rechtstreeks gebruikt",
-      status: directStatus(summary),
-      note: "Fallback verandert de bronwaarde niet.",
-      oclcValue: summary,
+      transformation: "eerste aanwezige samenvattingswaarde in _text geplaatst",
+      status: directStatus(summaryText),
+      oclcValue: summaryText,
       mappedValue: result?.summaries?.summary?._text,
     }),
     row({
@@ -388,12 +455,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].genres.genre",
       rawXmlPath: "aquabrowser.results.result.genres.genre",
       rawJsonPath: "results.result[].genres.genre",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].genre[].description",
       mappedPath: "results.result[].genres.genre",
       transformation: "iedere genreomschrijving in een genre-object geplaatst",
       status: directStatus(genres),
-      note: "Genre is nu gemapt wanneer OCLC het levert.",
       oclcValue: genres,
       mappedValue: result?.genres?.genre,
     }),
@@ -402,12 +468,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].subjects.topical-subject",
       rawXmlPath: "aquabrowser.results.result.subjects.topical-subject",
       rawJsonPath: "results.result[].subjects.topical-subject",
-      endpoint,
-      oclcPath: "items[].subjects / items[].subjectSchoolWise / items[].subjectPim",
+      endpoint: endpoints.discovery,
+      oclcPath: "subjects[].description",
       mappedPath: "results.result[].subjects.topical-subject",
       transformation: "ieder onderwerp in een topical-subject-object geplaatst",
       status: directStatus(subjects),
-      note: "na wanneer titlesummary geen onderwerpen levert.",
       oclcValue: subjects,
       mappedValue: result?.subjects?.["topical-subject"],
     }),
@@ -416,15 +481,14 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].target-audiences.target-audience",
       rawXmlPath: "aquabrowser.results.result.target-audiences.target-audience",
       rawJsonPath: "results.result[].target-audiences.target-audience",
-      endpoint,
-      oclcPath: "items[].audience / items[].targetGroup / items[].youth + items[].adult",
+      endpoint: endpoints.discovery,
+      oclcPath: "audience / targetGroup / youth + adult",
       mappedPath: "results.result[].target-audiences.target-audience",
       transformation:
         audience.status === "afgeleid"
-          ? "doelgroep afgeleid uit youth/adult-vlaggen"
-          : "directe doelgroepwaarde in contractobject geplaatst",
+          ? "doelgroep afgeleid uit youth/adult"
+          : "doelgroepwaarden in contractobject geplaatst",
       status: audience.status,
-      note: "Directe audience-data heeft voorrang; anders worden youth/adult-vlaggen gebruikt.",
       oclcValue: audience.value,
       mappedValue: result?.["target-audiences"]?.["target-audience"],
     }),
@@ -433,12 +497,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].series.series-title",
       rawXmlPath: "aquabrowser.results.result.series.series-title",
       rawJsonPath: "results.result[].series.series-title",
-      endpoint,
-      oclcPath: "items[].titleSeries[0]",
+      endpoint: endpoints.discovery,
+      oclcPath: "titleSeries[0]",
       mappedPath: "results.result[].series.series-title",
-      transformation: "waarden in series-title-object geplaatst",
+      transformation: "reekswaarden in series-title-object geplaatst",
       status: directStatus(series),
-      note: "na wanneer titlesummary geen reeks levert.",
       oclcValue: series,
       mappedValue: result?.series?.["series-title"],
     }),
@@ -447,12 +510,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].identifiers.isbn-id",
       rawXmlPath: "aquabrowser.results.result.identifiers.isbn-id",
       rawJsonPath: "results.result[].identifiers.isbn-id",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].isbn[0]",
       mappedPath: "results.result[].identifiers.isbn-id",
       transformation: "eerste ISBN in identifier-object geplaatst",
       status: directStatus(isbn),
-      note: "De OCLC ISBN-waarde blijft ongewijzigd.",
       oclcValue: isbn,
       mappedValue: result?.identifiers?.["isbn-id"],
     }),
@@ -461,12 +523,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].identifiers.ppn-id",
       rawXmlPath: "aquabrowser.results.result.identifiers.ppn-id",
       rawJsonPath: "results.result[].identifiers.ppn-id",
-      endpoint,
-      oclcPath: "items[].ppn[0]",
+      endpoint: endpoints.discovery,
+      oclcPath: "ppn[0]",
       mappedPath: "results.result[].identifiers.ppn-id",
       transformation: "eerste PPN in identifier-object geplaatst",
       status: directStatus(ppn),
-      note: "na wanneer titlesummary geen apart PPN levert.",
       oclcValue: ppn,
       mappedValue: result?.identifiers?.["ppn-id"],
     }),
@@ -475,12 +536,11 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].frabl",
       rawXmlPath: "aquabrowser.results.result.frabl",
       rawJsonPath: "results.result[].frabl",
-      endpoint,
+      endpoint: endpoints.titlesummary,
       oclcPath: "items[].id / items[].frbrkey",
       mappedPath: "results.result[].frabl",
-      transformation: "OCLC FRBR-id in frabl-contractobject geplaatst",
+      transformation: "FRBR-id in contractobject geplaatst",
       status: directStatus(sourceId),
-      note: "Dit is de OCLC FRBR-id; er wordt geen oude ABL hex-waarde opgebouwd.",
       oclcValue: sourceId,
       mappedValue: result?.frabl,
     }),
@@ -489,13 +549,12 @@ function buildResultRows(entry = {}, result = {}, resultIndex, endpoint) {
       label: "results.result[].undup-info",
       rawXmlPath: "aquabrowser.results.result.undup-info",
       rawJsonPath: "results.result[].undup-info",
-      endpoint,
-      oclcPath: "items[].id / items[].frbrkey / items[].childTitleList[] / titel / auteur",
+      endpoint: endpoints.titlesummary,
+      oclcPath: "items[].id / items[].childTitleList[] / title / author",
       mappedPath: "results.result[].undup-info",
-      transformation: "contractobject samengesteld uit beschikbare OCLC groepsgegevens",
-      status: derivedStatus(sourceId || title?.childTitleList),
-      note: "Geen oude OBA-id of oude zoeklink wordt opgebouwd.",
-      oclcValue: { sourceId, childTitleList: title?.childTitleList },
+      transformation: "contractobject samengesteld uit groepsgegevens",
+      status: derivedStatus(sourceId || summary?.childTitleList),
+      oclcValue: { sourceId, childTitleList: summary?.childTitleList },
       mappedValue: result?.["undup-info"],
     }),
   ];
@@ -509,11 +568,15 @@ export function buildSearchMappingRows(raw = {}, mapped = {}) {
     endpointName(perspectiveCall?.url) || "/branch/{branchId}/clienttype/default/perspective";
   const titlesummaryEndpoint =
     endpointName(titlesummaryCall?.url) || "/branch/{branchId}/perspective/{perspectiveId}/titlesummary";
+  const discoveryEndpoint = "/discovery/title/{id}";
 
   const sourceEntries = asArray(raw?.titles);
   const mappedResults = asArray(mapped?.results?.result);
   const resultRows = sourceEntries.flatMap((entry, index) =>
-    buildResultRows(entry, mappedResults[index] || {}, index + 1, titlesummaryEndpoint)
+    buildResultRows(entry, mappedResults[index] || {}, index + 1, {
+      titlesummary: titlesummaryEndpoint,
+      discovery: discoveryEndpoint,
+    })
   );
 
   return [
@@ -539,12 +602,10 @@ export function toSearchMappingCsv(rows = []) {
     "mapped waarde",
   ];
 
-  const lines = [
+  return [
     headers.join(";"),
     ...asArray(rows).map((item) =>
       headers.map((header) => escapeCsv(item?.[header])).join(";")
     ),
-  ];
-
-  return lines.join("\n");
+  ].join("\n");
 }

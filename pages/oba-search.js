@@ -375,9 +375,7 @@ export default function SearchPage() {
   const allOclc = {
     perspectiveResponse: calls[0]?.body || {},
     titlesummaryResponse: raw?.searchResponse || calls[1]?.body || {},
-    debug: {
-      calls,
-    },
+    discoveryTitleResponses: asArray(raw?.discoveryTitleResponses),
   };
   const perspectives = asArray(raw?.perspectives);
 
