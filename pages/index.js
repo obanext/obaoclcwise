@@ -11,8 +11,9 @@ const detailOptions = [
   {
     label: "ALL oba.nl detailpagina",
     description:
-      "OCLC Wise data wordt geladen in een mock-up oba.nl detailpagina met alle mogelijke filters en facetten uit OCLC Wise endpoints.",
-    status: "Nog te implementeren",
+      "OCLC Wise brondata wordt rechtstreeks geladen in een detailweergave, zonder mapping naar het OBA JSON-contract.",
+    href: "/oclc-detail/842851",
+    status: "Beschikbaar",
   },
   {
     label: "SOLL oba.nl detailpagina",

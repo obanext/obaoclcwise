@@ -246,7 +246,7 @@ function normalizeItem(item = {}, index = 0) {
     frbrkey: text(item?.frbrkey),
     cWiseId: text(item?.cWiseId),
     origin: text(item?.origin),
-    detailHref: detailId ? `/oba-detail/${encodeURIComponent(detailId)}` : "",
+    detailHref: detailId ? `/oclc-detail/${encodeURIComponent(detailId)}` : "",
     title: text(item?.title),
     mainTitle: text(item?.mainTitle),
     subtitle: text(item?.subtitle),

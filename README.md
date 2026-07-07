@@ -96,3 +96,13 @@ Deze testflows blijven voorlopig apart beoordeelbaar en worden later per stuk op
 - natuurlijke taal / Nexi
 
 Ze worden niet samengevoegd met IST search/detail zolang hun testdoel nog apart beoordeeld moet worden.
+
+
+## ALL OCLC testflows
+
+De ALL-pagina's tonen OCLC-brondata zonder mapping naar het OBA JSON-contract.
+
+- `/oclc-search`: visuele zoekresultaten, Alles OCLC, OCLC API calls, JSON-download, resultaten-CSV en facetten-CSV.
+- `/oclc-detail/[id]`: visuele detailpagina, specificaties, beschikbaarheid, Alles OCLC, OCLC API calls, JSON-download en brondata-CSV.
+
+Zoekresultaten van `/oclc-search` linken naar `/oclc-detail/[id]`.

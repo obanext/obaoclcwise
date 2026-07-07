@@ -118,9 +118,9 @@ function selectedSet(filters = []) {
   return new Set(asArray(filters).map(text).filter(Boolean));
 }
 
-function downloadCsv(filename, csv) {
+function downloadFile(filename, contents, mimeType) {
   try {
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([contents], { type: mimeType });
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement("a");
 
@@ -131,11 +131,19 @@ function downloadCsv(filename, csv) {
     document.body.removeChild(anchor);
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    console.error("CSV download mislukt", error);
-    window.alert("CSV download mislukt. Controleer de console.");
+    console.error("Download mislukt", error);
+    window.alert("Download mislukt. Controleer de console.");
   }
 }
 
+function downloadCsv(filename, csv) {
+  downloadFile(filename, csv, "text/csv;charset=utf-8;");
+}
+
+/**
+ * ALL search page.
+ * Presents OCLC search data directly as a visual result list, source JSON, API calls and downloads.
+ */
 export default function OclcSearchPage() {
   const router = useRouter();
 
@@ -402,6 +410,13 @@ export default function OclcSearchPage() {
 
   const resultRows = useMemo(() => buildOclcResultRows(data), [data]);
   const facetRows = useMemo(() => buildOclcFacetRows(data), [data]);
+  const allOclc = useMemo(
+    () => ({
+      perspectiveResponse: data?.raw?.perspectiveResponse || null,
+      titlesummaryResponse: data?.raw?.searchResponse || null,
+    }),
+    [data]
+  );
 
   const resultCount = Number(data?.pagination?.total || 0).toLocaleString("nl-NL");
   const currentPage = Number(data?.pagination?.page || page || 1);
@@ -719,6 +734,19 @@ export default function OclcSearchPage() {
           <button
             type="button"
             className="tab-button"
+            onClick={() =>
+              downloadFile(
+                `oclc-search-${query || "zoekopdracht"}.json`,
+                pretty(allOclc),
+                "application/json;charset=utf-8;"
+              )
+            }
+          >
+            Download OCLC JSON
+          </button>{" "}
+          <button
+            type="button"
+            className="tab-button"
             onClick={() => downloadCsv(`oclc-resultaten-${query || "zoekopdracht"}.csv`, toOclcResultCsv(resultRows))}
           >
             Download resultaten CSV
@@ -730,6 +758,13 @@ export default function OclcSearchPage() {
           >
             Download facetten CSV
           </button>
+
+          <details className="debug-block">
+            <summary>Alles OCLC</summary>
+            <div className="debug-content">
+              <pre>{pretty(allOclc)}</pre>
+            </div>
+          </details>
 
           <details className="debug-block">
             <summary>OCLC API calls</summary>
@@ -746,27 +781,6 @@ export default function OclcSearchPage() {
               ) : (
                 <pre>Geen calls beschikbaar</pre>
               )}
-            </div>
-          </details>
-
-          <details className="debug-block">
-            <summary>Generieke OCLC output</summary>
-            <div className="debug-content">
-              <pre>{pretty(data)}</pre>
-            </div>
-          </details>
-
-          <details className="debug-block">
-            <summary>Facet rows</summary>
-            <div className="debug-content">
-              <pre>{pretty(facetRows)}</pre>
-            </div>
-          </details>
-
-          <details className="debug-block">
-            <summary>Result rows</summary>
-            <div className="debug-content">
-              <pre>{pretty(resultRows)}</pre>
             </div>
           </details>
         </section>
