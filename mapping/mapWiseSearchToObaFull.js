@@ -1,7 +1,7 @@
 // Normalize values that may be singletons or arrays in OCLC responses.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
-// Convert optional values to safe text for the OBA JSON contract.
+// Convert optional values to safe text for the current OBA JSON contract.
 const text = (value) => {
   if (typeof value === "string") return value.trim();
   if (value === null || value === undefined) return "";
@@ -16,24 +16,18 @@ function isNumericId(value) {
   return /^\d+$/.test(text(value));
 }
 
-// Split an OCLC display name into firstname/lastname attributes required by the existing OBA contract.
+// Split an OCLC display name into firstname/lastname contract attributes.
 function splitName(value = "") {
   const source = text(value);
 
-  if (!source) {
-    return { first: "", last: "" };
-  }
+  if (!source) return { first: "", last: "" };
 
   if (source.includes(",")) {
     const [last = "", ...rest] = source.split(",");
-    return {
-      first: text(rest.join(", ")),
-      last: text(last),
-    };
+    return { first: text(rest.join(", ")), last: text(last) };
   }
 
   const parts = source.split(/\s+/).filter(Boolean);
-
   return {
     first: text(parts.slice(0, -1).join(" ")),
     last: text(parts.slice(-1).join(" ")),
@@ -51,23 +45,23 @@ function coverImage(title = {}) {
   return first(title.imageUrls?.small, title.imageUrls?.medium, title.imageUrls?.large);
 }
 
-// Map OCLC media to the existing OBA formats.format contract node.
+// Map OCLC media directly to the current formats.format contract node.
 function normalizeFormat(title = {}) {
-  const media = text(title.media?.description);
-  const raw = text(title.media?.icon).toLowerCase();
+  const description = text(title.media?.description);
+  const code = text(title.media?.code);
 
-  if (!media && !raw) return [];
+  if (!description && !code) return [];
 
   return [
     {
       _attributes: {
         translation: "Formaat",
         "search-method": "format",
-        "search-term": raw,
+        "search-term": code,
         "search-type": "searcher",
-        raw,
+        raw: code,
       },
-      _text: media,
+      _text: description,
     },
   ];
 }
@@ -92,13 +86,120 @@ function normalizeSubjects(title = {}) {
     }));
 }
 
+// Map OCLC genre descriptions to genres.genre contract nodes.
+function normalizeGenres(title = {}) {
+  return asArray(title.genre)
+    .map((genre) => text(genre?.description || genre))
+    .filter(Boolean)
+    .map((value) => ({
+      _attributes: {
+        translation: "Genre",
+        "search-method": "genre",
+        "search-term": value,
+        "search-type": "searcher",
+      },
+      _text: value,
+    }));
+}
+
+// Map a directly supplied OCLC series object to the series contract node.
+function normalizeSeries(title = {}) {
+  const source = asArray(title.titleSeries)[0] || {};
+  const description = text(source.description);
+
+  if (!description) return null;
+
+  return {
+    "series-title": {
+      _attributes: {
+        translation: "In de reeks",
+        "search-method": "series",
+        "search-term": description,
+        "search-type": "searcher",
+        volume: text(source.addition || source.number),
+      },
+      _text: description,
+    },
+  };
+}
+
+// Map direct audience data, or derive a readable audience from OCLC youth/adult flags.
+function normalizeAudience(title = {}) {
+  const source = title.audience || title.targetGroup || {};
+  const directDescription = text(source?.description || (typeof source === "string" ? source : ""));
+  const directCode = text(source?.code);
+
+  if (directDescription || directCode) {
+    return {
+      "target-audience": {
+        _attributes: {
+          translation: "Doelgroep",
+          "search-method": "targetaudience",
+          "search-term": directCode,
+          "search-type": "searcher",
+          raw: directCode,
+        },
+        _text: directDescription,
+      },
+    };
+  }
+
+  let description = "";
+  let code = "";
+
+  if (title.youth === true && title.adult === true) {
+    description = "Jeugd en volwassenen";
+    code = "youth,adult";
+  } else if (title.youth === true) {
+    description = "Jeugd";
+    code = "youth";
+  } else if (title.adult === true) {
+    description = "Volwassenen";
+    code = "adult";
+  }
+
+  return {
+    "target-audience": {
+      _attributes: {
+        translation: "Doelgroep",
+        "search-method": "targetaudience",
+        "search-term": code,
+        "search-type": code ? "searcher" : "",
+        raw: code,
+      },
+      _text: description,
+    },
+  };
+}
+
+// Build undup-info only from available OCLC grouping data; no old OBA id value is created.
+function normalizeUndupInfo(title = {}, sourceId = "", detailId = "", authorName = "") {
+  const children = asArray(title.childTitleList);
+  const count = children.length ? String(children.length) : "";
+  const key = text(sourceId || detailId);
+
+  return {
+    _attributes: {
+      key,
+      cnt: count,
+      sort: "",
+      frabl: text(sourceId),
+      "frabl-global-count": count,
+      "frabl-key1": text(title.title || title.mainTitle),
+      "frabl-key2": authorName,
+      translation: "Informatie over dubbele items",
+      "undup-all-search": "",
+    },
+  };
+}
+
 // Map one OCLC search result to one results.result[] object in the current OBA search JSON contract.
 function normalizeResult(entry = {}) {
   const detailId = getDetailId(entry);
   if (!detailId) return null;
 
   const title = entry.title || {};
-  const sourceId = text(entry.sourceId || title.frbrkey || title.id);
+  const sourceId = text(entry.sourceId || title.frbrkey || title.frbrKey);
   const authorName = text(title.author?.description || title.author);
   const authorParts = splitName(authorName);
   const isbn = text(asArray(title.isbn)[0]);
@@ -106,21 +207,22 @@ function normalizeResult(entry = {}) {
   const language = asArray(title.language)[0] || {};
   const formats = normalizeFormat(title);
   const subjects = normalizeSubjects(title);
+  const genres = normalizeGenres(title);
+  const series = normalizeSeries(title);
+  const edition = text(title.edition || title.annotationEdition);
 
-  return {
+  const result = {
     id: {
-      // Technische contractvorming: de OCLC/Wise title id wordt in de oude OBA id-vorm geplaatst
-      // omdat dit searchcontract die vorm nog verwacht. De bronwaarde blijft detailId.
       _attributes: {
         nativeid: detailId,
         sourceid: sourceId,
-        ds: "library/v/OBA",
+        ds: "",
         translation: "ID",
         "search-method": "id",
-        "search-term": `|oba-catalogus|${detailId}`,
+        "search-term": detailId,
         "search-type": "precise",
       },
-      _text: `|oba-catalogus|${detailId}`,
+      _text: detailId,
     },
 
     "detail-page": {
@@ -129,9 +231,7 @@ function normalizeResult(entry = {}) {
 
     coverimages: {
       coverimage: {
-        _attributes: {
-          translation: "Cover",
-        },
+        _attributes: { translation: "Cover" },
         _text: coverImage(title),
       },
     },
@@ -147,9 +247,7 @@ function normalizeResult(entry = {}) {
         _text: text(title.title || title.mainTitle),
       },
       "short-title": {
-        _attributes: {
-          translation: "Korte titel",
-        },
+        _attributes: { translation: "Korte titel" },
         _text: first(title.mainTitle, title.title),
       },
     },
@@ -170,9 +268,7 @@ function normalizeResult(entry = {}) {
       },
     },
 
-    formats: {
-      format: formats,
-    },
+    formats: { format: formats },
 
     publication: {
       year: {
@@ -204,9 +300,9 @@ function normalizeResult(entry = {}) {
         _attributes: {
           translation: "Taal",
           "search-method": "language",
-          "search-term": text(language.code).toLowerCase(),
+          "search-term": text(language.code),
           "search-type": "searcher",
-          raw: text(language.code).toLowerCase(),
+          raw: text(language.code),
         },
         _text: text(language.description || language),
       },
@@ -214,43 +310,34 @@ function normalizeResult(entry = {}) {
 
     description: {
       pages: {
-        _attributes: {
-          translation: "Pagina's",
-        },
+        _attributes: { translation: "Pagina's" },
         _text: text(title.annotationCollation).split(":")[0]?.trim() || "",
       },
       "physical-description": {
-        _attributes: {
-          translation: "Kenmerken",
-        },
+        _attributes: { translation: "Kenmerken" },
         _text: text(title.annotationCollation),
       },
     },
 
     summaries: {
       summary: {
-        _attributes: {
-          translation: "Samenvatting",
-        },
+        _attributes: { translation: "Samenvatting" },
         _text: first(title.contents, title.contentsSchoolWise, title.summary),
       },
     },
 
-    subjects: {
-      "topical-subject": subjects,
-    },
+    genres: { genre: genres },
+    subjects: { "topical-subject": subjects },
+    "target-audiences": normalizeAudience(title),
 
-    "target-audiences": {
-      "target-audience": {
-        _attributes: {
-          translation: "Doelgroep",
-          "search-method": "targetaudience",
-          "search-term": text(title.audience?.code),
-          "search-type": "searcher",
-          raw: text(title.audience?.code),
-        },
-        _text: text(title.audience?.description),
+    frabl: {
+      _attributes: {
+        translation: "FRBR Nummer (FRABL)",
+        "search-method": sourceId ? "frabl" : "",
+        "search-term": sourceId,
+        "search-type": sourceId ? "searcher" : "",
       },
+      _text: sourceId,
     },
 
     identifiers: {
@@ -264,9 +351,7 @@ function normalizeResult(entry = {}) {
         _text: isbn,
       },
       "normalized-isbn-id": {
-        _attributes: {
-          translation: "ISBN (genormaliseerd)",
-        },
+        _attributes: { translation: "ISBN (genormaliseerd)" },
         _text: isbn,
       },
       "ppn-id": {
@@ -280,22 +365,22 @@ function normalizeResult(entry = {}) {
       },
     },
 
-    "undup-info": {
-      _attributes: {
-        key: `|oba-catalogus|${detailId}`,
-        cnt: "",
-        sort: "year",
-        frabl: sourceId,
-        "frabl-global-count": "",
-        "frabl-key1": text(title.title || title.mainTitle),
-        "frabl-key2": authorName,
-        translation: "Informatie over dubbele items",
-        "undup-all-search": "",
-      },
-    },
-
+    "undup-info": normalizeUndupInfo(title, sourceId, detailId, authorName),
     custom: {},
   };
+
+  if (edition) {
+    result.publication.editions = {
+      edition: {
+        _attributes: { translation: "Editie" },
+        _text: edition,
+      },
+    };
+  }
+
+  if (series) result.series = series;
+
+  return result;
 }
 
 // Public mapper for IST search.
@@ -314,25 +399,13 @@ export function mapWiseSearchToObaFull(raw = {}) {
       "detail-level": "Default",
       source: "oclc-wise",
     },
-
     meta: {
-      count: {
-        _text: String(raw.total || results.length || 0),
-      },
-      page: {
-        _text: String(raw.page || 1),
-      },
-      query: {
-        _text: text(raw.query),
-      },
+      count: { _text: String(raw.total || results.length || 0) },
+      page: { _text: String(raw.page || 1) },
+      query: { _text: text(raw.query) },
     },
-
     feedbacks: {},
-
-    results: {
-      result: results,
-    },
-
+    results: { result: results },
     suggestions: {
       suggestion: asArray(raw.suggestions)
         .map((item) => ({

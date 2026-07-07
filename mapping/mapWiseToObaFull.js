@@ -49,12 +49,12 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
 
     id: {
       _attributes: {
-        nativeid: "",
+        nativeid: text(title.id),
         ds: "",
         translation: "ID",
-        "search-method": "",
-        "search-term": "",
-        "search-type": "",
+        "search-method": "id",
+        "search-term": text(title.id),
+        "search-type": "precise",
       },
       _text: text(title.id),
     },
@@ -62,7 +62,7 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
     frabl: buildFrabl(title),
 
     "detail-page": {
-      _text: "",
+      _text: text(title.id) ? `/oba-detail/${encodeURIComponent(text(title.id))}` : "",
     },
 
     coverimages: {
@@ -190,14 +190,14 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
       },
     },
 
-    "undup-info": buildUndupInfo(),
+    "undup-info": buildUndupInfo(title, author),
 
     custom: {},
     branches: buildTopBranches(itemInformation),
     services: {},
   };
 
-  output["librarian-info"].record["undup-info"] = buildUndupInfo();
+  output["librarian-info"].record["undup-info"] = buildUndupInfo(title, author);
 
   if (hasSeries(series)) {
     output.series = buildSeries(series);
@@ -206,7 +206,7 @@ export function mapWiseToObaFull({ title, titleInfo, availability, itemInformati
   return output;
 }
 
-// Preserve the old contract shape: one value as object, multiple values as array.
+// Preserve the current contract shape: one value as object, multiple values as array.
 function repeatable(items) {
   const filtered = asArray(items).filter(hasTextDeep);
   if (filtered.length === 1) return filtered[0];
@@ -281,11 +281,11 @@ function buildIdentifiers(isbn = [], ppn = [], titleRecord = {}) {
   const isbnNodes = isbn.map((value) => ({
     _attributes: {
       "search-method": "isbn",
-      "search-term": value.startsWith("=") ? value : `=${value}`,
+      "search-term": value,
       "search-type": "searcher",
       translation: "ISBN",
     },
-    _text: value.startsWith("=") ? value : `=${value}`,
+    _text: value,
   }));
 
   if (isbnNodes.length) {
@@ -408,24 +408,28 @@ function buildSeries(series = {}) {
   };
 }
 
-// Keep the undup-info contract node empty when OCLC does not provide the old ABL undup data.
-function buildUndupInfo() {
+// Build undup-info from available OCLC grouping fields without creating old OBA ids or URLs.
+function buildUndupInfo(title = {}, author = {}) {
+  const frbr = text(title.frbrkey || title.frbrKey);
+  const children = asArray(title.childTitleList);
+  const count = children.length ? String(children.length) : "";
+
   return {
     _attributes: {
-      key: "",
-      cnt: "",
+      key: frbr,
+      cnt: count,
       sort: "",
-      frabl: "",
-      "frabl-global-count": "",
-      "frabl-key1": "",
-      "frabl-key2": "",
+      frabl: frbr,
+      "frabl-global-count": count,
+      "frabl-key1": text(title.title || title.mainTitle),
+      "frabl-key2": text(author.description),
       translation: "Informatie over dubbele items",
       "undup-all-search": "",
     },
   };
 }
 
-// Build the df/MARC compatibility block in the existing OBA detail contract.
+// Build the df/MARC block in the current OBA detail contract.
 // Values are direct OCLC values where possible; parsed/split values must be documented in the mapping CSV.
 function buildMarc({
   title,
@@ -446,7 +450,7 @@ function buildMarc({
 }) {
   const marc = { _attributes: { src: "v" } };
 
-  const df010 = isbn.map((value) => ({ df010: marcNode("a", value.startsWith("=") ? value : `=${value}`) }));
+  const df010 = isbn.map((value) => ({ df010: marcNode("a", value) }));
   if (df010.length) marc.df010 = repeatable(df010);
 
   const ppnValue = text(ppn[0] || titleRecord.ppn);
@@ -541,7 +545,7 @@ function marcNode(key, value) {
   };
 }
 
-// Split an OCLC display name into the name parts expected by the old contract.
+// Split an OCLC display name into the name parts expected by the current contract.
 function parseName(description = "") {
   const source = text(description);
   if (!source) {

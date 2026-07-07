@@ -37,6 +37,8 @@ Zichtbare outputs:
 - Mapped output
 - Download mapping CSV
 
+De search mapping CSV bevat de algemene zoekregels één keer en daarna de veldmapping voor alle maximaal 20 resultaten van de huidige pagina.
+
 Niet zichtbaar als aparte tab:
 
 - mockup raw wrapper
@@ -69,17 +71,17 @@ Zichtbare outputs:
 
 ## Mappingstatussen
 
-De CSV gebruikt deze betekenissen:
+De CSV gebruikt uitsluitend deze statussen:
 
-- `direct`: OCLC-veldwaarde wordt direct op het contractpad gezet.
-- `technische contractvorming`: OCLC-waarde wordt in de bestaande JSON-vorm geplaatst, bijvoorbeeld `_text` en `_attributes`.
-- `afgeleid`: waarde wordt gesplitst, samengesteld of uit requestcontext gehaald.
-- `leeg bewust`: het contractveld bestaat, maar er is geen bruikbare OCLC-bronwaarde.
-- `niet beschikbaar in OCLC`: het bestaande OBA/GB veld heeft geen equivalent in de gebruikte OCLC responses.
+- `direct`: de OCLC-waarde wordt op het juiste OBA JSON-contractpad gezet. `_text` en `_attributes` horen bij deze directe contractplaatsing.
+- `afgeleid`: de waarde wordt berekend, gesplitst of samengesteld uit één of meer OCLC/requestwaarden.
+- `na`: de gebruikte OCLC-response bevat geen bruikbare bronwaarde voor dit contractveld. Er wordt niets verzonnen.
+
+Een veld dat zowel in OCLC als in het huidige OBA JSON-contract bestaat, moet worden gemapt en mag niet als eindstatus `niet gemapt` houden.
 
 ## Belangrijke regel
 
-Oude OBA/ABL-waarden worden niet inhoudelijk nagemaakt. Alleen technische contractvorming is toegestaan als het huidige OBA JSON-contract die vorm nodig heeft. Dat moet in codecommentaar en CSV zichtbaar zijn.
+Oude OBA/ABL-waarden worden niet nagemaakt. OCLC-waarden worden alleen op de bestaande OBA JSON-contractpaden geplaatst. Afleidingen worden expliciet als `afgeleid` gedocumenteerd.
 
 ## Nog apart te beoordelen testpagina's
 
