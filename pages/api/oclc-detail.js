@@ -1,11 +1,10 @@
-const BASE = process.env.WISE_BASE_URL || "https://bibliotheek-accept1.wise.oclc.org/restapi";
+const BASE = "https://bibliotheek-accept1.wise.oclc.org/restapi";
 const BRANCH_ID = process.env.WISE_BRANCH_ID || "1000";
 
 const headers = {
   Accept: "application/json",
   application: process.env.APPLICATION,
   WISE_KEY: process.env.WISE_KEY,
-  wise_key: process.env.WISE_KEY,
 };
 
 /**
