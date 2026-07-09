@@ -54,6 +54,7 @@ export function buildOclcDetailRows(data = {}) {
     ["/title/{id}", data?.titleInfo],
     ["/branch/{branchId}/titleavailability/{id}", data?.availability],
     ["/title/{id}/iteminformation", data?.itemInformation],
+    ["/title/{titleId}/recommended/title?limit=5&offset=0", data?.recommendations],
   ];
 
   return sections.flatMap(([endpoint, body]) => flattenValue(body, endpoint));

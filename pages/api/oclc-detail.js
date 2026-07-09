@@ -59,9 +59,18 @@ export default async function handler(req, res) {
       )}?clientType=PUBLIC&holdsCount=true`
     ),
     fetchSafe(`${BASE}/title/${encodeURIComponent(id)}/iteminformation`),
+    fetchSafe(
+      `${BASE}/title/${encodeURIComponent(id)}/recommended/title?limit=5&offset=0`
+    ),
   ]);
 
-  const [titleCall, titleInfoCall, availabilityCall, itemInformationCall] = calls;
+  const [
+    titleCall,
+    titleInfoCall,
+    availabilityCall,
+    itemInformationCall,
+    recommendationsCall,
+  ] = calls;
   const failedCall = calls.find((call) => !call.ok);
 
   if (failedCall && !titleCall.ok) {
@@ -77,6 +86,7 @@ export default async function handler(req, res) {
     titleInfo: titleInfoCall.body,
     availability: availabilityCall.body,
     itemInformation: itemInformationCall.body,
+    recommendations: recommendationsCall.body,
     debug: { calls },
   });
 }

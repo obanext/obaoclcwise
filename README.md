@@ -103,6 +103,8 @@ Ze worden niet samengevoegd met IST search/detail zolang hun testdoel nog apart 
 De ALL-pagina's tonen OCLC-brondata zonder mapping naar het OBA JSON-contract.
 
 - `/oclc-search`: visuele zoekresultaten, Alles OCLC, OCLC API calls, JSON-download, resultaten-CSV en facetten-CSV.
-- `/oclc-detail/[id]`: visuele detailpagina, specificaties, beschikbaarheid, Alles OCLC, OCLC API calls, JSON-download en brondata-CSV.
+- `/oclc-detail/[id]`: visuele detailpagina, specificaties, beschikbaarheid, vijf aanbevolen titels, Alles OCLC, OCLC API calls, JSON-download en brondata-CSV.
+
+De ALL-detailpagina gebruikt daarnaast `/title/{titleId}/recommended/title?limit=5&offset=0` voor de aanbevelingen.
 
 Zoekresultaten van `/oclc-search` linken naar `/oclc-detail/[id]`.

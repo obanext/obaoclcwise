@@ -241,6 +241,43 @@ a {
   word-break: break-word;
 }
 
+
+.recommendations-section {
+  margin: 0 0 48px;
+}
+
+.recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.recommendation-card {
+  display: block;
+  min-height: 150px;
+  padding: 18px;
+  border: 1px solid #d8d8d8;
+  border-radius: 18px;
+  background: #f2f2f2;
+  text-decoration: none;
+}
+
+.recommendation-card h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.recommendation-card p {
+  margin: 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.recommendation-card:hover {
+  background: #e8e8e8;
+}
+
 /* Debug */
 
 .debug-section {
@@ -1458,4 +1495,17 @@ textarea {
   background: #fff;
   cursor: pointer;
   font-size: 12px;
+}
+
+
+@media (max-width: 1050px) {
+  .recommendation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .recommendation-grid {
+    grid-template-columns: 1fr;
+  }
 }

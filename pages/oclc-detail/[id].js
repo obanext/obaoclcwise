@@ -141,6 +141,11 @@ export default function OclcDetailPage() {
     return rows.filter(([, value]) => value);
   }, [genres, id, language, series, titleData, titleInfo]);
 
+  const recommendationItems = useMemo(
+    () => asArray(data?.recommendations?.items).slice(0, 5),
+    [data]
+  );
+
   const availabilityRows = useMemo(
     () =>
       asArray(data?.itemInformation).map((item, index) => ({
@@ -159,6 +164,7 @@ export default function OclcDetailPage() {
       titleResponse: data?.titleInfo || null,
       titleAvailabilityResponse: data?.availability || null,
       itemInformationResponse: data?.itemInformation || null,
+      recommendedTitlesResponse: data?.recommendations || null,
     }),
     [data]
   );
@@ -210,6 +216,51 @@ export default function OclcDetailPage() {
           <div className="hero-right">
             {cover ? <img src={cover} className="cover-large" alt={title || "Cover"} /> : <div className="cover-placeholder">Geen cover</div>}
           </div>
+        </section>
+
+        <section className="recommendations-section">
+          <div className="section-header">
+            <h2>Aanbevolen titels</h2>
+          </div>
+
+          {recommendationItems.length ? (
+            <div className="recommendation-grid">
+              {recommendationItems.map((item, index) => {
+                const recommendationId = text(item?.id);
+                const recommendationTitle = firstText(item?.title, `Aanbevolen titel ${index + 1}`);
+                const recommendationMeta = [
+                  text(item?.author),
+                  text(item?.publicationYear),
+                  text(item?.medium?.code),
+                ].filter(Boolean);
+
+                const content = (
+                  <>
+                    <h3>{recommendationTitle}</h3>
+                    {recommendationMeta.length ? (
+                      <p>{recommendationMeta.join(" · ")}</p>
+                    ) : null}
+                  </>
+                );
+
+                return recommendationId ? (
+                  <a
+                    className="recommendation-card"
+                    href={`/oclc-detail/${encodeURIComponent(recommendationId)}`}
+                    key={`${recommendationId}-${index}`}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <div className="recommendation-card" key={`recommendation-${index}`}>
+                    {content}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="info-card">Geen aanbevolen titels beschikbaar</div>
+          )}
         </section>
 
         <div className="section-header">
