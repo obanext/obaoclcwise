@@ -1,12 +1,18 @@
+import { getWiseKey } from "../../utils/wiseKey";
+
 const BASE = process.env.WISE_BASE_URL || "https://bibliotheek-accept1.wise.oclc.org/restapi";
 const BRANCH_ID = process.env.WISE_BRANCH_ID || "1000";
 
-const headers = {
-  Accept: "application/json",
-  application: process.env.APPLICATION,
-  WISE_KEY: process.env.WISE_KEY,
-  wise_key: process.env.WISE_KEY,
-};
+function getHeaders() {
+  const wiseKey = getWiseKey();
+
+  return {
+    Accept: "application/json",
+    application: process.env.APPLICATION,
+    WISE_KEY: wiseKey,
+    wise_key: wiseKey,
+  };
+}
 
 /**
  * Fetch one OCLC endpoint and retain the request URL, status and response body.
@@ -14,7 +20,7 @@ const headers = {
  */
 async function fetchSafe(url) {
   try {
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers: getHeaders() });
     const bodyText = await response.text();
 
     let body = null;

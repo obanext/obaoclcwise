@@ -1,17 +1,20 @@
 import { mapWiseToObaFull } from "../../mapping/mapWiseToObaFull";
+import { getWiseKey } from "../../utils/wiseKey";
 
 const BASE = "https://bibliotheek-accept1.wise.oclc.org/restapi";
 
-const headers = {
-  Accept: "application/json",
-  application: process.env.APPLICATION,
-  WISE_KEY: process.env.WISE_KEY,
-};
+function getHeaders() {
+  return {
+    Accept: "application/json",
+    application: process.env.APPLICATION,
+    WISE_KEY: getWiseKey(),
+  };
+}
 
 // Fetch one OCLC detail endpoint and preserve url/status/body for the API-call debug panel.
 async function fetchSafe(url) {
   try {
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, { headers: getHeaders() });
     const body = await res.json().catch(() => null);
     return { url, status: res.status, body };
   } catch {

@@ -1,12 +1,16 @@
+import { getWiseKey } from "../../utils/wiseKey";
+
 const BASE = process.env.WISE_BASE_URL || "https://bibliotheek-accept8.wise.oclc.org/restapi";
 const BRANCH_ID = process.env.WISE_BRANCH_ID || "1000";
 const DEFAULT_PERSPECTIVE_ID = process.env.WISE_DEFAULT_PERSPECTIVE_ID || "3682";
 const DEFAULT_SCOPE = "anything";
 
-const headers = {
-  Accept: "application/json",
-  wise_key: process.env.WISE_KEY,
-};
+function getHeaders() {
+  return {
+    Accept: "application/json",
+    wise_key: getWiseKey(),
+  };
+}
 
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
@@ -27,7 +31,7 @@ function appendRepeatedParam(url, key, values) {
 
 async function fetchSafe(url) {
   try {
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers: getHeaders() });
     const bodyText = await response.text();
 
     let body = null;
