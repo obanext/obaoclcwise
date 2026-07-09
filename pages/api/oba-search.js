@@ -1,17 +1,14 @@
 import { mapWiseSearchToObaFull } from "../../mapping/mapWiseSearchToObaFull";
-import { getWiseKey } from "../../utils/wiseKey";
 
 const BASE = "https://bibliotheek-accept1.wise.oclc.org/restapi";
 const BRANCH_ID = "1000";
 const DEFAULT_PERSPECTIVE_ID = "3682";
 const DEFAULT_SCOPE = "anything";
 
-function getSearchHeaders() {
-  return {
-    Accept: "application/json",
-    wise_key: getWiseKey(),
-  };
-}
+const searchHeaders = {
+  Accept: "application/json",
+  wise_key: process.env.WISE_KEY,
+};
 
 // Normalize fields that may be returned by OCLC as either a single value or an array.
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
@@ -29,7 +26,7 @@ function isNumericId(value) {
 }
 
 // Fetch OCLC JSON while preserving status/body for the visible API-call debug panel.
-async function fetchSafe(url, headers = getSearchHeaders()) {
+async function fetchSafe(url, headers = searchHeaders) {
   try {
     const response = await fetch(url, { headers });
     const bodyText = await response.text();

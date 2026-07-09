@@ -1,5 +1,3 @@
-import { getWiseKey } from "../../utils/wiseKey";
-
 const BASE = process.env.WISE_BASE_URL || "https://bibliotheek-accept1.wise.oclc.org/restapi";
 const BRANCH_ID = process.env.WISE_BRANCH_ID || "1000";
 const CLIENT_TYPE = process.env.WISE_CLIENT_TYPE || "default";
@@ -7,12 +5,10 @@ const DEFAULT_PERSPECTIVE_ID = process.env.WISE_DEFAULT_PERSPECTIVE_ID || "3682"
 const DEFAULT_SCOPE = "anything";
 const DEFAULT_SORT = "2910";
 
-function getSearchHeaders() {
-  return {
-    Accept: "application/json",
-    wise_key: getWiseKey(),
-  };
-}
+const searchHeaders = {
+  Accept: "application/json",
+  wise_key: process.env.WISE_KEY,
+};
 
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
@@ -26,7 +22,7 @@ function isNumericId(value) {
   return /^\d+$/.test(text(value));
 }
 
-async function fetchSafe(url, headers = getSearchHeaders()) {
+async function fetchSafe(url, headers = searchHeaders) {
   try {
     const response = await fetch(url, { headers });
     const bodyText = await response.text();
